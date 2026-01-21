@@ -11,5 +11,5 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SFML)
 
-add_executable(secure_card main.cpp)
+add_executable(secure_card src/main.cpp)
 target_link_libraries(secure_card PRIVATE sfml-graphics sfml-window sfml-network sfml-system)

@@ -2,7 +2,7 @@
 #include <iostream>
 
 int main() {
-    std::cout << "Game startup...";
+    std::cout << "Game startup...\n";
 
     // Prepare window.
     sf::RenderWindow window(sf::VideoMode({ 640, 480 }), "Logan Reid - Secure Card");
