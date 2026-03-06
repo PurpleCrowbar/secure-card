@@ -1,45 +1,41 @@
-#include <SFML/Graphics.hpp>
+#include "Cryptosystem.h"
+#include <sodium.h>
+#include <SFML/Network.hpp>
 #include <iostream>
+#include <array>
+#include <vector>
+#include <string>
+#include <unordered_map>
+#include <stdexcept>
+#include "Game/Game.h"
 
-int main() {
-    std::cout << "Game startup...\n";
+int main(const int argc, char** argv) {
+    if (sodium_init() < 0) {
+        std::cerr << "Failed to initialise libsodium\n";
+        return 1;
+    }
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " <host|client>\n";
+        return 1;
+    }
+    bool isHost = std::string(argv[1]) == "host";
 
-    // Prepare window.
-    sf::RenderWindow window(sf::VideoMode({ 640, 480 }), "Logan Reid - Secure Card");
-    window.setFramerateLimit(60);	//Request 60 frames per second
-    std::cout << "Window ready...\n";
+    LookupTable lookupTable;
+    Network network;
+    constexpr uint16_t PORT = 54321; // some arbitrary port
+    if (isHost) network.host(PORT);
+    else network.connect("127.0.0.1", PORT);
 
-    // Clock for timing the 'dt' value.
-    sf::Clock clock;
-
-    // Custom clear colour for the window (light blue).
-    sf::Color clear_colour(135, 206, 250);
-
-    while (window.isOpen()) {
-        // Calculate dt.
-        float dt = clock.restart().asSeconds();
-
-        // Handle window events (e.g. key press).
-        while (const std::optional event = window.pollEvent())	{
-            // This event is triggered when the "x" button is pressed to close the window.
-            if (event->is<sf::Event::Closed>()) {
-                std::cout << "Window closed...\n";
-                window.close();
-            }
-            // This event checks key press and closes the window on "ESC".
-            if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
-                if (keyPressed->scancode == sf::Keyboard::Scancode::Escape) {
-                    std::cout << "ESC pressed, closing window...\n";
-                    window.close();
-                }
-            }
-        }
-        window.clear(clear_colour);
-
-        // Render you game objects here
-
-        window.display();
+    // TODO: Implement DeckSelector which allows player to get deck from some menu
+    // In this case, however, just use standard deck of 15 bolts
+    std::vector<CardID> selectedDeck;
+    for (int i = 0; i < 15; i++) {
+        selectedDeck.push_back(CardID::LIGHTNING_BOLT);
     }
 
+    Game game(network, isHost ? PlayerID::ONE : PlayerID::TWO, lookupTable, selectedDeck);
+    game.run();
+
+    network.disconnect();
     return 0;
 }
