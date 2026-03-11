@@ -1,3 +1,4 @@
+// TODO: reorder these includes as per Google/LLVM style
 #include "Cryptosystem.h"
 #include <sodium.h>
 #include <SFML/Network.hpp>
@@ -14,13 +15,13 @@ int main(const int argc, char** argv) {
         std::cerr << "Failed to initialise libsodium\n";
         return 1;
     }
-    if (argc != 2) {
+    if (argc != 2 || (std::string(argv[1]) != "host" && std::string(argv[1]) != "client")) {
         std::cerr << "Usage: " << argv[0] << " <host|client>\n";
         return 1;
     }
     bool isHost = std::string(argv[1]) == "host";
 
-    LookupTable lookupTable;
+    LookupTable::instance(); // generate lookup table
     Network network;
     constexpr uint16_t PORT = 54321; // some arbitrary port
     if (isHost) network.host(PORT);
@@ -33,7 +34,7 @@ int main(const int argc, char** argv) {
         selectedDeck.push_back(CardID::LIGHTNING_BOLT);
     }
 
-    Game game(network, isHost ? PlayerID::ONE : PlayerID::TWO, lookupTable, selectedDeck);
+    Game game(network, isHost ? PlayerID::ONE : PlayerID::TWO, selectedDeck);
     game.run();
 
     network.disconnect();

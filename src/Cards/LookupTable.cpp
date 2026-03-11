@@ -1,67 +1,112 @@
 #include "LookupTable.h"
-#include "CardFactory.h"
-#include "CardSets.h"
+#include <fstream>
 #include <format>
+#include <iostream>
+#include <stdexcept>
+#include "../Constants.h"
+
+static constexpr const char* LOOKUP_TABLE_FILE = "lookup_table";
 
 LookupTable::LookupTable() {
-    // Note: The lookup table is only populated with constructed-legal cards on initialisation. Created cards are added when necessary
-    for (const auto id : CardSets::ConstructedLegalCards) {
-        for (Nonce nonce = 0; nonce < CardFactory::create(id)->getMaxCopies(); nonce++) {
-            Point pointRepresentation = encodeToPoint(id, nonce);
-            if (lookupTable.insert({pointRepresentation, id}).second) {
-                currentGreatestNonce.insert_or_assign(id, nonce);
-                continue;
+    if (tryLoadFromFile()) {
+        std::cout << "Loaded lookup table from file.\n";
+        return;
+    }
+    std::cout << "Generating lookup table...\n";
+    generateTable();
+    saveToFile();
+    std::cout << "Lookup table generated and saved.\n";
+}
+
+/**
+ * @return False if file missing, corrupted, or header vals are mismatched
+ */
+bool LookupTable::tryLoadFromFile() {
+    std::ifstream file(LOOKUP_TABLE_FILE, std::ios::binary);
+    if (!file) return false;  // file doesn't exist
+
+    // Schema version comes first. if it doesn't match, don't bother trying to read the rest
+    uint16_t schemaVersion;
+    file.read(reinterpret_cast<char*>(&schemaVersion), sizeof(schemaVersion));
+    if (!file || schemaVersion != Constants::SCHEMA_VERSION) {
+        std::cout << "Schema version mismatch, regenerating.\n";
+        return false;
+    }
+    // max deck size = maximum number of cards that can exist in a deck. the same as "max nonce"
+    uint8_t maxDeckSize;
+    file.read(reinterpret_cast<char*>(&maxDeckSize), sizeof(maxDeckSize));
+    if (!file || maxDeckSize != Constants::MAX_DECK_SIZE) {
+        std::cout << "Max deck size mismatch, regenerating.\n";
+        return false;
+    }
+    // the max card ID constant actually gets the ID of "None", the final enum value. this is totally fine, but must
+    // be taken into consideration during implementation
+    uint16_t maxCardId;
+    file.read(reinterpret_cast<char*>(&maxCardId), sizeof(maxCardId));
+    if (!file || maxCardId != Constants::MAX_CARD_ID) {
+        std::cout << "Max card ID mismatch, regenerating.\n";
+        return false;
+    }
+    // now that header is read and validated, we can read the entry data from the file
+    lookupTable.reserve(static_cast<size_t>(Constants::MAX_CARD_ID) * Constants::MAX_DECK_SIZE);
+    for (uint16_t cardId = 0; cardId < Constants::MAX_CARD_ID; ++cardId) {
+        for (Nonce nonce = 0; nonce < Constants::MAX_DECK_SIZE; ++nonce) {
+            Point point;
+            uint16_t storedId;
+            file.read(reinterpret_cast<char*>(point.data()), POINT_BYTES);
+            file.read(reinterpret_cast<char*>(&storedId), sizeof(storedId));
+            if (!file) {
+                std::cout << "Unexpected EOF while reading, regenerating.\n";
+                lookupTable.clear();
+                return false;
             }
-            throw std::runtime_error(std::format(
-                "Hash collision detected:\nPrevious: {}\nNew: {}",
-                static_cast<uint16_t>(lookupTable.at(pointRepresentation)), static_cast<uint16_t>(id)
-            ));
+            lookupTable.emplace(point, static_cast<CardID>(storedId));
         }
     }
+
+    return true;
+}
+
+void LookupTable::generateTable() {
+    lookupTable.reserve(static_cast<size_t>(Constants::MAX_CARD_ID) * Constants::MAX_DECK_SIZE);
+    for (uint16_t cardId = 0; cardId < Constants::MAX_CARD_ID; ++cardId) {
+        for (Nonce nonce = 0; nonce < Constants::MAX_DECK_SIZE; ++nonce) {
+            Point point = encodeToPoint(static_cast<CardID>(cardId), nonce);
+            if (!lookupTable.emplace(point, static_cast<CardID>(cardId)).second) {
+                throw std::runtime_error(std::format(
+                    "Collision during generation: cardId={}, nonce={}", cardId, nonce
+                ));
+            }
+        }
+    }
+}
+
+// TODO: Program should continue to operate even when serialisation impossible (e.g., because in read-only directory)
+void LookupTable::saveToFile() const {
+    std::ofstream file(LOOKUP_TABLE_FILE, std::ios::binary);
+    if (!file) throw std::runtime_error("Failed to open lookup table file for writing.");
+
+    // write the header constants to the file
+    const uint16_t schemaVersion = Constants::SCHEMA_VERSION;
+    const uint8_t  maxDeckSize = Constants::MAX_DECK_SIZE;
+    const uint16_t maxCardId = Constants::MAX_CARD_ID;
+    file.write(reinterpret_cast<const char*>(&schemaVersion), sizeof(schemaVersion));
+    file.write(reinterpret_cast<const char*>(&maxDeckSize), sizeof(maxDeckSize));
+    file.write(reinterpret_cast<const char*>(&maxCardId), sizeof(maxCardId));
+
+    // write entry data. must iterate in same order as generation so file contents are deterministic
+    for (uint16_t cardId = 0; cardId < Constants::MAX_CARD_ID; ++cardId) {
+        for (Nonce nonce = 0; nonce < Constants::MAX_DECK_SIZE; ++nonce) {
+            Point point = encodeToPoint(static_cast<CardID>(cardId), nonce);
+            file.write(reinterpret_cast<const char*>(point.data()), POINT_BYTES);
+            file.write(reinterpret_cast<const char*>(&cardId),      sizeof(cardId));
+        }
+    }
+
+    if (!file) throw std::runtime_error("Failed to write lookup table to disk.");
 }
 
 std::optional<CardID> LookupTable::getCardID(const Point& cardPoint) const {
     auto it = lookupTable.find(cardPoint);
     return it != lookupTable.end() ? std::optional(it->second) : std::nullopt;
-}
-
-/**
- * Adds specified card ID to lookup table. If already present, adds value with incrementation of greatest nonce
- * @param id Card ID of card being added to lookup table
- * @return True if insertion was successful, false if insertion unnecessary. Failure results in error
- */
-bool LookupTable::addCardID(CardID id) {
-    if (!maxDeckSize) [[unlikely]] throw std::runtime_error("Maximum deck size undefined in LookupTable. Call setMaxDeckSize in Game instantiation.");
-
-    if (!currentGreatestNonce.contains(id)) {
-        // If card ID not already present in lookup table, add it with nonce = 0
-        Point pointRep = encodeToPoint(id, 0);
-        if (lookupTable.insert({pointRep, id}).second) {
-            currentGreatestNonce.insert({id, 0});
-            return true;
-        }
-        throw std::runtime_error(std::format(
-            "LookupTable maps are out of sync. Hash collision detected:\nPrevious: {}\nNew: {}",
-            static_cast<uint16_t>(lookupTable.at(pointRep)), static_cast<uint16_t>(id)
-        ));
-    }
-
-    Nonce newGreatestNonce = currentGreatestNonce.at(id) + 1;
-    if (newGreatestNonce >= maxDeckSize) return false; // no insertion necessary
-    Point pointRep = encodeToPoint(id, newGreatestNonce);
-    if (lookupTable.insert({pointRep, id}).second) {
-        currentGreatestNonce.insert_or_assign(id, newGreatestNonce);
-        return true;
-    }
-    throw std::runtime_error(std::format(
-        "LookupTable maps are out of sync. Hash collision detected:\nPrevious: {}\nNew: {}",
-        static_cast<uint16_t>(lookupTable.at(pointRep)), static_cast<uint16_t>(id)
-    ));
-}
-
-/**
- * Must be set during the instantiation of the Game object; this class isn't responsible for this info.
- */
-void LookupTable::setMaxDeckSize(uint8_t maxDeckSize) {
-    this->maxDeckSize = maxDeckSize;
 }

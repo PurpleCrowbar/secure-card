@@ -7,27 +7,26 @@
 #include <optional>
 #include <vector>
 
+// TODO: Add source file to this class; it's outgrown this header
 /**
  * Container of data pertaining to the game state. Used in both the Game class and the (unimplemented) Verifier class
  */
 class GameState {
 public:
     // Construct GameState with both players' encrypted decks
-    // TODO: fix these parameter names -- they're not "local deck" and "opponent deck", they're "Player One" and "Player Two"
-    GameState(const std::vector<std::pair<Point, Scalar>>& localDeck, const std::vector<std::pair<Point, Scalar>>& opponentDeck, LookupTable& lookupTable)
-        : playerData { PlayerData(localDeck, lookupTable), PlayerData(opponentDeck, lookupTable) } {}
+    GameState(const std::vector<std::pair<Point, Scalar>>& p1Deck, const std::vector<std::pair<Point, Scalar>>& p2Deck)
+        : playerData { PlayerData(p1Deck), PlayerData(p2Deck) } {}
     // Construct GameState with only local deck, cleartext
-    GameState(const std::vector<CardID>& localCleartextDeck, LookupTable& lookupTable)
-        : playerData { PlayerData(localCleartextDeck, lookupTable), lookupTable } {}
+    // GameState(const std::vector<CardID>& localCleartextDeck)
+    //     : playerData { PlayerData(localCleartextDeck) } {}
 
-    // Individual player data. The GameState two copies of these - one for each player
+    // Individual player data. The GameState possesses a PlayerData for each of the two players
     struct PlayerData {
-        PlayerData(LookupTable& lookupTable)
-            : deck(lookupTable) {}
-        PlayerData(const std::vector<std::pair<Point, Scalar>>& inpDeck, LookupTable& lookupTable)
-            : deck(inpDeck, lookupTable) {}
-        PlayerData(const std::vector<CardID>& inpDeck, LookupTable& lookupTable)
-            : deck(inpDeck, lookupTable) {}
+        PlayerData() = default;
+        PlayerData(const std::vector<std::pair<Point, Scalar>>& encryptedDeck)
+            : deck(encryptedDeck) {}
+        PlayerData(const std::vector<CardID>& plaintextDeck)
+            : deck(plaintextDeck) {}
 
         Deck deck;
         // TODO: Could make a Hand class in the future for storing hand contents + visibility states
@@ -75,5 +74,7 @@ public:
     // index 0 = Player One, index 1 = Player Two
     std::array<PlayerData, 2> playerData;
     // the player whose turn it is. **must be set after coin toss deciding who goes first**.
+    // TODO: move to constructor? game state needs an active player so this should ideally not be optional.
+    // TODO: could coin toss, *then* make gamestate w/ this initialised via GameState constructor
     std::optional<PlayerID> activePlayer = std::nullopt;
 };

@@ -7,20 +7,19 @@
 #include <variant>
 #include <vector>
 
-// TODO: When (if) LookupTable is constexpr, remove lookupTable reference as arg from Deck constructors
 class Deck {
 public:
     // Constructor for empty deck
-    explicit Deck(LookupTable& lookupTable);
+    Deck();
     // Constructor for Deck object with encrypted cards + local keys. vector should be sorted with top card at index 0
-    explicit Deck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck, LookupTable& lookupTable);
+    explicit Deck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
     // Constructor for a vector of plaintext card IDs (plaintext deck)
-    explicit Deck(const std::vector<CardID>& plaintextDeck, LookupTable& lookupTable);
+    explicit Deck(const std::vector<CardID>& plaintextDeck);
     void setPlaintextContents(const std::unordered_map<CardID, uint8_t>& deckContents);
     void setPlaintextContents(const std::vector<CardID>& deckContents);
 
     // Setters
-    bool addOpponentKey(uint8_t index, const Scalar& remoteKey, std::optional<CardID> id = std::nullopt);
+    bool addOpponentKey(uint8_t index, const Scalar& remoteKey);
     // TODO: addRandomCard for random cards unknown by both players. would have following signature:
     // bool addRandomCard(const std::set<CardID>& setOfPossibilities, const uint32_t& localRandomNum);
     bool addUnencryptedCard(CardID id, uint8_t index = 0);
@@ -34,11 +33,12 @@ public:
 
     // Getters
     [[nodiscard]] std::optional<CardID> getCardIDAtIndex(uint8_t index) const;
-    [[nodiscard]] std::optional<std::pair<Scalar, std::optional<CardID>>> getCardDataForOpponent(uint8_t index) const;
+    [[nodiscard]] std::optional<Scalar> getLocalKey(uint8_t index) const;
     [[nodiscard]] uint8_t getSize() const;
     [[nodiscard]] std::set<uint8_t> getIndicesOfCardsSolelyEncryptedByOpponent() const;
     [[nodiscard]] std::set<uint8_t> getIndicesOfCardsSolelyEncryptedLocally() const;
     [[nodiscard]] std::unordered_map<CardID, uint8_t> getContents() const;
+    [[nodiscard]] bool isKnownToOpponent(uint8_t index) const;
 
 private:
     struct CardEntry {
@@ -47,8 +47,6 @@ private:
         // first = local, second = remote
         std::pair<std::optional<Scalar>, std::optional<Scalar>> keys;
         bool knownToOpponent = false;
-        // Tracker for Donation/Brainstorm/Garth effects. see documentation titled "Deck Key Matrix"
-        bool solelyEncryptedByLocalPlayer = false;
     };
 
     // Ordered top-to-bottom, meaning index 0 = top of deck
@@ -56,5 +54,6 @@ private:
     // key = card ID, val = quantity present. Tracks deck contents irrespective of order.
     // For example, if contents = {BOLT, ELIXIR, BOLT} (encrypted), plaintextContents = { {BOLT, 2}, {ELIXIR, 1} }
     std::unordered_map<CardID, uint8_t> plaintextContents;
-    LookupTable& lookupTable;
+    const LookupTable& lookupTable;
+    // TODO: should we add "Freshly Shuffled" tracker which, when false, prevents calling fullyDecrypt?
 };

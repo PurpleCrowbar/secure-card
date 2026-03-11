@@ -5,9 +5,8 @@
 #include <algorithm>
 #include <random>
 
-Game::Game(Network& network, PlayerID localPlayer, LookupTable& lookupTable,
-           const std::vector<CardID>& localDeck)
-    : network(network), localPlayer(localPlayer), lookupTable(lookupTable), deckList(localDeck)
+Game::Game(Network& network, PlayerID localPlayer, const std::vector<CardID>& localDeck)
+    : network(network), localPlayer(localPlayer), deckList(localDeck)
 {
     // GameState is NOT constructed here, it requires the encrypted decks, which only exist after the shuffle phase
     // TODO: just initialise state as plaintext for local deck and empty for opponent deck at this stage
@@ -17,13 +16,13 @@ void Game::run() {
     std::cout << "\n=== Shuffling decks ===\n";
     auto p1Deck = performShuffle(PlayerID::ONE);
     auto p2Deck = performShuffle(PlayerID::TWO);
-    state = std::make_unique<GameState>(p1Deck, p2Deck, lookupTable);
+    state = std::make_unique<GameState>(p1Deck, p2Deck);
 
     std::cout << "\n=== Drawing opening hands ===\n";
     drawCards(PlayerID::ONE, 4);
     drawCards(PlayerID::TWO, 4);
 
-    // TODO: coin flip her edetermines who goes first
+    // TODO: coin flip here determines who goes first
     state->activePlayer = PlayerID::ONE;
     std::cout << "\n=== Game starting! ===\n";
 
@@ -59,7 +58,6 @@ void Game::run() {
     // TODO: key dump + verification
 }
 
-
 // For a deck owned by Alice, with opponent Bob:
 //
 //   1. Alice converts her deck to curve points, encrypts ALL cards with a
@@ -87,7 +85,7 @@ std::vector<std::pair<Point, Scalar>> Game::performShuffle(PlayerID deckOwner) {
 
     // if the local player owns the deck being shuffled
     if (iAmOwner) {
-        // TODO: must delete "deckList" variable and use game state decks instead
+        // TODO: must delete "deckList" variable and use game state decks instead, else can't shuffle midgame
         auto deckPoints = convertCardsToPoints(deckList);
         // initial bulk encryption with single key followed by shuffle
         auto bulkKey = generateKeyPair();
@@ -176,68 +174,74 @@ std::vector<std::pair<Point, Scalar>> Game::performShuffle(PlayerID deckOwner) {
  * @param player Drawing player
  * @param count Number of cards being drawn
  */
-void Game::drawCards(PlayerID player, int count) {
-    bool iAmDrawing = (player == localPlayer);
-    auto& deckOwnerData = state->getPlayerData(player);
+void Game::drawCards(PlayerID player, uint8_t count) {
+    bool localPlayerIsDrawing = (player == localPlayer);
+    auto& drawingPlayerData = state->getPlayerData(player);
 
     // check that there's enough cards to draw
-    int available = std::min(count, static_cast<int>(deckOwnerData.deck.getSize()));
-    if (available <= 0) {
+    uint8_t totalCardsToDraw = std::min(count, drawingPlayerData.deck.getSize());
+    if (totalCardsToDraw <= 0) {
         // TODO: fatigue damage if deck is empty
-        std::cout << "  [Draw] " << (iAmDrawing ? "Your" : "Opponent's")
+        std::cout << "  [Draw] " << (localPlayerIsDrawing ? "Your" : "Opponent's")
                   << " deck is empty.\n";
         return;
     }
 
-    // local player drawing the cards
-    if (iAmDrawing) {
+    if (localPlayerIsDrawing) {
         // receive per-card keys from opponent for the top card(s)
-        auto keys = network.receiveScalars();
-        if (static_cast<int>(keys.size()) < available) {
-            throw std::runtime_error("Received fewer keys than expected during draw");
+        std::vector<Scalar> receivedKeys = network.receiveScalars();
+        uint8_t requiredKeyCount = 0;
+        for (int i = 0; i < totalCardsToDraw; i++) {
+            // we only need a remote key if we don't already know the card value
+            if (!drawingPlayerData.deck.getCardIDAtIndex(i).has_value()) requiredKeyCount++;
+        }
+        if (receivedKeys.size() != requiredKeyCount) {
+            throw std::runtime_error("Received unexpected number of keys during draw");
         }
 
         // Decrypt each card (add the opponent's key and the card will be decrypted automatically
         // using both our unique key and theirs
-        for (int i = 0; i < available; i++) {
-            if (!deckOwnerData.deck.addOpponentKey(i, keys[i])) {
+        for (int i = 0; i < totalCardsToDraw; i++) {
+            // If we already know the value of this card, move onto the next one
+            if (drawingPlayerData.deck.getCardIDAtIndex(i).has_value()) continue;
+            if (!drawingPlayerData.deck.addOpponentKey(i, receivedKeys[i])) {
                 throw std::runtime_error("addOpponentKey failed for index " + std::to_string(i));
             }
         }
 
         // draw the now-decrypted cards from the top of the deck into our hand
-        for (int i = 0; i < available; i++) {
-            auto cardId = deckOwnerData.deck.draw();
-            if (cardId.has_value()) {
-                deckOwnerData.handContents.push_back(std::make_pair(cardId.value(), false));
-                std::cout << "  [Draw] Drew: " << CardFactory::create(cardId.value())->getName() << "\n";
-            } else {
-                // means the card wasn't found in the lookup table, so the opponent gave us a dud key (or there's a bug)
-                std::cerr << "  [Draw] WARNING: draw() returned nullopt after decryption\n";
-            }
+        for (int i = 0; i < totalCardsToDraw; i++) {
+            std::optional<CardID> cardId = drawingPlayerData.deck.draw();
+            // card wasn't found in the lookup table, so the opponent gave us a dud key (or there's a bug)
+            if (!cardId.has_value())
+                throw std::runtime_error("[Draw] Drawn card ID not found in lookup table, meaning dud key received");
+            drawingPlayerData.handContents.push_back(std::make_pair(cardId.value(), false)); // TODO: false only if opponent doesn't know
+            std::cout << "  [Draw] Drew: " << CardFactory::create(cardId.value())->getName() << "\n";
         }
     // opponent drawing card(s)
     } else {
-        std::vector<Scalar> keysToSend; // our local unique keys that opponent needs for drawing
-        keysToSend.reserve(available);
+        std::vector<Scalar> keysToSend; // our local keys that opponent needs for drawing (unless they already know the card value)
+        keysToSend.reserve(totalCardsToDraw);
 
-        for (int i = 0; i < available; i++) {
-            auto keyData = deckOwnerData.deck.getCardDataForOpponent(i);
-            if (!keyData.has_value()) {
-                throw std::runtime_error("No key available for opponent's deck index " + std::to_string(i));
+        for (int i = 0; i < totalCardsToDraw; i++) {
+            // if opponent already knows the value of the card, continue to next card
+            if (drawingPlayerData.deck.isKnownToOpponent(i)) continue;
+            std::optional<Scalar> localKey = drawingPlayerData.deck.getLocalKey(i);
+            if (!localKey.has_value()) {
+                throw std::runtime_error("No local key available for card in opponent's deck at index " + std::to_string(i));
             }
-            keysToSend.push_back(keyData->first);
+            keysToSend.push_back(localKey.value());
         }
         network.sendScalars(keysToSend);
 
-        // update the our opponent's deck and hands (remove from deck, add to hand)
-        for (int i = 0; i < available; i++) {
-            deckOwnerData.deck.removeCardAtIndex(0);
-            // TODO: implement revealed cards being added to hand
-            deckOwnerData.handContents.push_back(std::nullopt); // nullopt because we don't know it (unless we do!)
+        // update our opponent's deck and hands (remove from deck, add to hand)
+        for (int i = 0; i < totalCardsToDraw; i++) {
+            drawingPlayerData.deck.removeCardAtIndex(0);
+            // TODO: implement locally known cards to hand
+            drawingPlayerData.handContents.push_back(std::nullopt); // nullopt because we don't know it
         }
 
-        std::cout << "  [Draw] Opponent drew " << available << " card(s).\n";
+        std::cout << "  [Draw] Opponent drew " << std::to_string(totalCardsToDraw) << " card" << (totalCardsToDraw == 1 ? "" : "s") << ".\n";
     }
 }
 
@@ -348,10 +352,10 @@ void Game::playCardLocal(int handIndex) {
     myData.currentMana -= card->getManaCost();
     // delete from hand
     myData.handContents.erase(myData.handContents.begin() + handIndex);
+    // resolve the card's effect
+    card->resolve(*this, localPlayer);
     // add to graveyard / discard pile
     myData.graveyard.push_back(cardId);
-    // resolve the card's effect. TODO: resolve effect *before* going to graveyard? probably
-    card->resolve(*this, localPlayer);
 }
 
 /**

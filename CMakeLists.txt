@@ -35,7 +35,8 @@ add_executable(secure_card src/main.cpp
         src/Cards/LookupTable.cpp
         src/Cards/LookupTable.h
         src/Network.cpp
-        src/Network.h)
+        src/Network.h
+        src/Constants.h)
 
 target_include_directories(secure_card PRIVATE
         ${sodium_SOURCE_DIR}/libsodium-win64/include

@@ -10,26 +10,27 @@ class Card;
 
 class Game {
 public:
-    Game(Network& network, PlayerID localPlayer, LookupTable& lookupTable, const std::vector<CardID>& localDeck);
+    Game(Network& network, PlayerID localPlayer, const std::vector<CardID>& localDeck);
 
     // Runs game lifecycle (initial shuffle, draw opening hands, main game loop)
     void run();
 
-    // methods used by cards' resolve method
+    // Mutative methods used by cards' resolve methods
     void dealDamage(PlayerID target, int amount);
+    // Exchanges keys and draws cards. Both players call with the same arguments.
+    // The drawing player receives keys; the other player sends keys.
+    void drawCards(PlayerID player, uint8_t count);
     void gainLife(PlayerID target, int amount);
+    // Runs the mental poker shuffle protocol for one player's deck, both
+    // players call this with the same deckOwner argument
+    std::vector<std::pair<Point, Scalar>> performShuffle(PlayerID deckOwner);
+
+    // Getters
     [[nodiscard]] PlayerID getLocalPlayer() const { return localPlayer; }
     [[nodiscard]] int getHandSize(PlayerID player) const;
     [[nodiscard]] int getMana(PlayerID player) const;
 
 private:
-    // Runs the mental poker shuffle protocol for one player's deck, both
-    // players call this with the same deckOwner argument
-    std::vector<std::pair<Point, Scalar>> performShuffle(PlayerID deckOwner);
-
-    // Exchanges keys and draws cards. Both players call with the same arguments.
-    // The drawing player receives keys; the other player sends keys.
-    void drawCards(PlayerID player, int count);
 
     // Called at the start of each turn; resets mana, draws a card
     void startTurn();
@@ -47,6 +48,6 @@ private:
     std::unique_ptr<GameState> state;
     Network& network;
     PlayerID localPlayer;
-    LookupTable& lookupTable;
+    // TODO: delete this. use Deck in GameState
     std::vector<CardID> deckList;  // our original plaintext deck
 };

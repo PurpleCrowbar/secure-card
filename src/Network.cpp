@@ -145,6 +145,7 @@ void Network::sendScalars(const std::vector<Scalar>& scalars) {
     }
 }
 
+// TODO: should return queue instead of vector?
 std::vector<Scalar> Network::receiveScalars() {
     uint8_t count = receiveUint8();
     std::vector<Scalar> result;
