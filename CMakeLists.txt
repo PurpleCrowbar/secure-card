@@ -17,28 +17,11 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(sodium)
 
-add_executable(secure_card src/main.cpp
-        src/Cryptosystem.h
-        src/Commitments/Commitment.h
-        src/PlayerID.h
-        src/Cards/Card.h
-        src/Cards/CardImplementations/LightningBolt.cpp
-        src/Cards/CardImplementations/LightningBolt.h
-        src/Cards/CardID.h
-        src/Game/Game.cpp
-        src/Game/Game.h
-        src/Cards/CardFactory.h
-        src/Cards/CardSets.h
-        src/Game/GameState.h
-        src/Cards/Deck.h
-        src/Cards/Deck.cpp
-        src/Cards/LookupTable.cpp
-        src/Cards/LookupTable.h
-        src/Network.cpp
-        src/Network.h
-        src/Constants.h
-        src/Cards/CardImplementations/Disorganize.cpp
-        src/Cards/CardImplementations/Disorganize.h)
+file(GLOB_RECURSE SOURCES
+    "src/*.cpp"
+    "src/*.h"
+)
+add_executable(secure_card ${SOURCES})
 
 target_include_directories(secure_card PRIVATE
         ${sodium_SOURCE_DIR}/libsodium-win64/include
