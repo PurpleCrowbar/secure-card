@@ -1,5 +1,5 @@
 #pragma once
-#include "Card.h"
+#include "../Card.h"
 
 class LightningBolt final : public Card {
 public:

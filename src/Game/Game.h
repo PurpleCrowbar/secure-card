@@ -31,7 +31,6 @@ public:
     [[nodiscard]] int getMana(PlayerID player) const;
 
 private:
-
     // Called at the start of each turn; resets mana, draws a card
     void startTurn();
     // switches state.activePlayer to the other player
@@ -44,10 +43,8 @@ private:
     void handleOpponentPlayCard();
     void printGameState() const;
 
-    // need to defer initialisation of state because it requires decks (only acquired after shuffling)
-    std::unique_ptr<GameState> state;
+    GameState state;
     Network& network;
     PlayerID localPlayer;
-    // TODO: delete this. use Deck in GameState
-    std::vector<CardID> deckList;  // our original plaintext deck
+    // TODO: add Verifier which logs shuffled decks, commitments, etc
 };

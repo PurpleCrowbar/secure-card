@@ -1,29 +1,38 @@
 #include "Deck.h"
 #include "../Cryptosystem.h"
 
+/**
+ * Empty deck constructor. Called at GameState initialisation for the remote player's deck.
+ */
 Deck::Deck() : lookupTable(LookupTable::instance()) {}
 
+/**
+ * Constructor for Deck with encrypted cards and local keys. As the local deck is initialised as plaintext, and the
+ * remote deck is initialised as empty, this should never <i>currently</i> be getting called.
+ * @param encryptedDeck Vector of encrypted cards and their corresponding local keys
+ */
 Deck::Deck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck) : lookupTable(LookupTable::instance()) {
-    contents.reserve(encryptedDeck.size());
-    for (auto cardKeyPair : encryptedDeck) {
-        contents.push_back({cardKeyPair.first, { cardKeyPair.second, std::nullopt }});
-    }
+    setEncryptedContents(encryptedDeck);
 }
 
+/**
+ * Plaintext deck constructor. Called at GameState initialisation for the local player's deck. Importantly, this
+ * populates the plaintextContents tracker which is critically important for the task of shuffling the deck.
+ * @param plaintextDeck Vector of plaintext card IDs
+ */
 Deck::Deck(const std::vector<CardID>& plaintextDeck) : lookupTable(LookupTable::instance()) {
     contents.reserve(plaintextDeck.size());
     for (const auto& cardID : plaintextDeck) {
         contents.push_back({cardID, { std::nullopt, std::nullopt }});
+        plaintextContents[cardID]++;
     }
 }
 
-void Deck::setPlaintextContents(const std::unordered_map<CardID, uint8_t>& deckContents) {
-    plaintextContents = deckContents;
-}
-
-void Deck::setPlaintextContents(const std::vector<CardID>& deckContents) {
-    for (const auto& card : deckContents) {
-        plaintextContents[card]++;
+void Deck::setEncryptedContents(const std::vector<std::pair<Point, Scalar>>& encryptedDeck) {
+    contents.clear();
+    contents.reserve(encryptedDeck.size());
+    for (const auto& [cardPoint, key] : encryptedDeck) {
+        contents.push_back({cardPoint, { key, std::nullopt }});
     }
 }
 
@@ -45,13 +54,15 @@ bool Deck::addOpponentKey(uint8_t index, const Scalar& remoteKey) {
             decrypt(std::get<Point>(contents[index].card),
                 contents[index].keys.first.value(), remoteKey)
         );
-    else // card only encrypted by opponent
+    else {
+        // card only encrypted by opponent
         card = lookupTable.getCardID(
             decrypt(std::get<Point>(contents[index].card), remoteKey)
         );
+        plaintextContents[card.value()]++;
+    }
     if (!card.has_value()) return false;
     contents[index].card = card.value();
-    plaintextContents[card.value()]++;
     return true;
 }
 
@@ -250,7 +261,7 @@ std::unordered_map<CardID, uint8_t> Deck::getContents() const {
 
 // TODO: Need to update this to std::expected<bool, DeckQueryError>. Return value of false currently means two completely different things
 /**
- * @param index
+ * @param index Index of card being checked
  * @return True if known to opponent, else false. Also returns false if index out of bounds
  */
 bool Deck::isKnownToOpponent(uint8_t index) const {

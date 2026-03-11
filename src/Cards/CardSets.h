@@ -4,7 +4,8 @@
 
 namespace CardSets {
     using enum CardID;
-     static const std::set ConstructedLegalCards {
-        LIGHTNING_BOLT
+    static const std::set ConstructedLegalCards {
+        LIGHTNING_BOLT,
+        DISORGANIZE
     };
 }

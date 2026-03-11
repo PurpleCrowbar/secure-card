@@ -8,7 +8,10 @@
 #include <random>
 #include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
+
+#include "Constants.h"
 #include "Cards/CardID.h"
 
 constexpr std::size_t SCALAR_BYTES = crypto_core_ristretto255_SCALARBYTES;      // 32
@@ -112,27 +115,28 @@ inline Point decrypt(const Point& ciphertext, const Scalar& localKey, const Scal
 // --------------- Mental Poker ---------------
 
 /**
- * Converts all of the cards in a vector into their card-point representations
- * @param cards Vector of cards to convert to points
- * @return A vector of card-point representations
+ * Converts the plaintext contents of a deck into their card-point forms with random, unique nonces applied
+ * @param cards Map of card IDs to convert. Key = card ID, val = quantity to process
+ * @return Unordered vector of card-point representations
  */
-inline std::vector<Point> convertCardsToPoints(const std::vector<CardID>& cards) {
+inline std::vector<Point> convertCardsToPoints(const std::unordered_map<CardID, uint8_t>& cards) {
     std::vector<Point> deck;
-    std::unordered_map<CardID, int> copyCount;
-
-    for (const auto& cardId : cards) {
-        Nonce nonce = copyCount[cardId]++;
-        // TODO: the nonce (copy index) should be any number between 0 and maxCopies. it should not be 0, 1, 2.
-        // e.g., if we run two copies of a card and maxCopies is 4, copy indices could be 3 and 1 instead of 0 and 1
-        deck.push_back(encodeToPoint(cardId, nonce));
+    for (const auto& [cardId, quantity] : cards) {
+        std::unordered_set<Nonce> usedNonces;
+        for (int i = 0; i < quantity; i++) {
+            Nonce nonce = static_cast<Nonce>(randombytes_uniform(Constants::MAX_DECK_SIZE));
+            while (usedNonces.contains(nonce)) nonce = (nonce + 1) % Constants::MAX_DECK_SIZE;
+            usedNonces.insert(nonce);
+            deck.push_back(encodeToPoint(cardId, nonce));
+        }
     }
-
     return deck;
 }
 
 /**
- * <b>This is not a networked function and should never be used in-game.</b> This <i>only</i> shuffles a local vector.
- * Should only be called after encrypting a vector of plaintext card-points with a single key. See Mental Poker protocol
+ * <b>This is not a networked function and should never be used in card resolutions.</b> This <i>only</i> shuffles a
+ * local vector. Should only be called after encrypting a vector of plaintext card-points with a single key.
+ * See Mental Poker protocol.
  * @param deck Reference to vector of card-points to be shuffled
  */
 inline void shuffleDeck(std::vector<Point>& deck) {

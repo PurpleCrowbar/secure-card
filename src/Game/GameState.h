@@ -16,13 +16,17 @@ public:
     // Construct GameState with both players' encrypted decks
     GameState(const std::vector<std::pair<Point, Scalar>>& p1Deck, const std::vector<std::pair<Point, Scalar>>& p2Deck)
         : playerData { PlayerData(p1Deck), PlayerData(p2Deck) } {}
-    // Construct GameState with only local deck, cleartext
-    // GameState(const std::vector<CardID>& localCleartextDeck)
-    //     : playerData { PlayerData(localCleartextDeck) } {}
+    // Construct GameState with cleartext local deck and empty remote deck
+    GameState(const std::vector<CardID>& localCleartextDeck, PlayerID localPlayer)
+        : playerData {
+            localPlayer == PlayerID::ONE ? PlayerData(localCleartextDeck) : PlayerData(),
+            localPlayer == PlayerID::TWO ? PlayerData(localCleartextDeck) : PlayerData(),
+        } {}
 
     // Individual player data. The GameState possesses a PlayerData for each of the two players
     struct PlayerData {
         PlayerData() = default;
+        // This specific constructor currently unused
         PlayerData(const std::vector<std::pair<Point, Scalar>>& encryptedDeck)
             : deck(encryptedDeck) {}
         PlayerData(const std::vector<CardID>& plaintextDeck)

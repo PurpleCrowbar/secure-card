@@ -6,46 +6,41 @@
 #include <random>
 
 Game::Game(Network& network, PlayerID localPlayer, const std::vector<CardID>& localDeck)
-    : network(network), localPlayer(localPlayer), deckList(localDeck)
-{
-    // GameState is NOT constructed here, it requires the encrypted decks, which only exist after the shuffle phase
-    // TODO: just initialise state as plaintext for local deck and empty for opponent deck at this stage
-}
+    : state(localDeck, localPlayer), network(network), localPlayer(localPlayer) {}
 
 void Game::run() {
     std::cout << "\n=== Shuffling decks ===\n";
-    auto p1Deck = performShuffle(PlayerID::ONE);
-    auto p2Deck = performShuffle(PlayerID::TWO);
-    state = std::make_unique<GameState>(p1Deck, p2Deck);
+    state.playerData[0].deck.setEncryptedContents(performShuffle(PlayerID::ONE));
+    state.playerData[1].deck.setEncryptedContents(performShuffle(PlayerID::TWO));
 
     std::cout << "\n=== Drawing opening hands ===\n";
     drawCards(PlayerID::ONE, 4);
     drawCards(PlayerID::TWO, 4);
 
     // TODO: coin flip here determines who goes first
-    state->activePlayer = PlayerID::ONE;
+    state.activePlayer = PlayerID::ONE;
     std::cout << "\n=== Game starting! ===\n";
 
     // First turn doesn't draw (like MtG: player going first skips first draw)
     bool firstTurn = true;
 
     // main gameplay loop
-    while (!state->isGameOver().first) {
+    while (!state.isGameOver().first) {
         if (!firstTurn) {
             startTurn();
         }
         firstTurn = false;
 
-        if (state->activePlayer.value() == localPlayer) {
+        if (state.activePlayer.value() == localPlayer) {
             runMyTurn();
         } else {
             runOpponentTurn();
         }
 
-        if (state->isGameOver().first) break;
+        if (state.isGameOver().first) break;
     }
 
-    auto [gameOver, winner] = state->isGameOver();
+    auto [gameOver, winner] = state.isGameOver();
     std::cout << "\n=== GAME OVER ===\n";
     if (!winner.has_value()) {
         std::cout << "It's a tie!\n";
@@ -81,19 +76,18 @@ void Game::run() {
 // Bob's key k_i for position p is still valid after step 3.
 
 std::vector<std::pair<Point, Scalar>> Game::performShuffle(PlayerID deckOwner) {
-    bool iAmOwner = (localPlayer == deckOwner);
+    bool localPlayerIsShuffling = (deckOwner == localPlayer);
 
     // if the local player owns the deck being shuffled
-    if (iAmOwner) {
-        // TODO: must delete "deckList" variable and use game state decks instead, else can't shuffle midgame
-        auto deckPoints = convertCardsToPoints(deckList);
+    if (localPlayerIsShuffling) {
+        auto deckPoints = convertCardsToPoints(state.getImmutablePlayerData(deckOwner).deck.getContents());
         // initial bulk encryption with single key followed by shuffle
         auto bulkKey = generateKeyPair();
         encryptDeckWithKey(deckPoints, bulkKey.k);
         shuffleDeck(deckPoints);
 
         // send 1-layer encryption deck to opponent
-        std::cout << "  [Shuffle] Sending bulk-encrypted deck to opponent...\n";
+        std::cout << "  [Shuffle] Sending bulk-encrypted deck to opponent... (" << deckPoints.size() << " cards)\n";
         network.sendPoints(deckPoints);
         // opponent sends us back our deck shuffled and with each card uniquely encrypted
         auto received = network.receivePoints();
@@ -176,12 +170,12 @@ std::vector<std::pair<Point, Scalar>> Game::performShuffle(PlayerID deckOwner) {
  */
 void Game::drawCards(PlayerID player, uint8_t count) {
     bool localPlayerIsDrawing = (player == localPlayer);
-    auto& drawingPlayerData = state->getPlayerData(player);
+    auto& drawingPlayerData = state.getPlayerData(player);
 
     // check that there's enough cards to draw
     uint8_t totalCardsToDraw = std::min(count, drawingPlayerData.deck.getSize());
     if (totalCardsToDraw <= 0) {
-        // TODO: fatigue damage if deck is empty
+        // TODO: implement fatigue damage if deck is empty
         std::cout << "  [Draw] " << (localPlayerIsDrawing ? "Your" : "Opponent's")
                   << " deck is empty.\n";
         return;
@@ -246,22 +240,22 @@ void Game::drawCards(PlayerID player, uint8_t count) {
 }
 
 void Game::startTurn() {
-    PlayerID active = state->activePlayer.value();
+    PlayerID active = state.activePlayer.value();
     // reset mana
-    state->getPlayerData(active).currentMana = state->getPlayerData(active).maxMana;
+    state.getPlayerData(active).currentMana = state.getPlayerData(active).maxMana;
     // draw a card
     drawCards(active, 1);
 }
 
 void Game::advanceTurn() {
-    state->activePlayer = PlayerIDUtils::getOpponent(state->activePlayer.value());
+    state.activePlayer = PlayerIDUtils::getOpponent(state.activePlayer.value());
 }
 
 /**
  * Display game state, prompt for actions, send packets to opponent.
  */
 void Game::runMyTurn() {
-    auto& myData = state->getPlayerData(localPlayer);
+    auto& myData = state.getPlayerData(localPlayer);
 
     // Reset mana at the start of our action phase
     // (already done in startTurn, but if this is turn 1 we reset here)
@@ -320,7 +314,7 @@ void Game::runMyTurn() {
         // play the card
         playCardLocal(handIndex);
 
-        if (state->isGameOver().first) return;
+        if (state.isGameOver().first) return;
     }
 }
 
@@ -330,7 +324,7 @@ void Game::runMyTurn() {
  * @param handIndex Index of card in our hand that we want to play
  */
 void Game::playCardLocal(int handIndex) {
-    auto& myData = state->getPlayerData(localPlayer);
+    auto& myData = state.getPlayerData(localPlayer);
     CardID cardId = myData.handContents[handIndex]->first;
     auto card = CardFactory::create(cardId);
 
@@ -375,13 +369,13 @@ void Game::runOpponentTurn() {
             }
             case PLAY_CARD: {
                 handleOpponentPlayCard();
-                if (state->isGameOver().first) return;
+                if (state.isGameOver().first) return;
                 break;
             }
             case CONCEDE: {
                 std::cout << "  Opponent conceded!\n";
                 // Set opponent's health to 0 to trigger game over
-                auto& oppData = state->getOpponentPlayerData(localPlayer);
+                auto& oppData = state.getOpponentPlayerData(localPlayer);
                 oppData.currentHealth = 0;
                 return;
             }
@@ -398,7 +392,7 @@ void Game::handleOpponentPlayCard() {
     auto card = CardFactory::create(cardId);
 
     PlayerID opponent = PlayerIDUtils::getOpponent(localPlayer);
-    auto& oppData = state->getPlayerData(opponent);
+    auto& oppData = state.getPlayerData(opponent);
 
     // check mana and hand size (can they afford it? do they have a card in hand?). when we add hand-tracking with
     // revealed cards we can make this even more sophisticated (post-game verification also plays a part later)
@@ -450,7 +444,7 @@ void Game::handleOpponentPlayCard() {
 }
 
 void Game::dealDamage(PlayerID target, int amount) {
-    auto& data = state->getPlayerData(target);
+    auto& data = state.getPlayerData(target);
     data.currentHealth = std::max(0, static_cast<int>(data.currentHealth) - amount);
     if (target == localPlayer) {
         std::cout << "  -> You take " << amount << " damage! ("
@@ -462,15 +456,15 @@ void Game::dealDamage(PlayerID target, int amount) {
 }
 
 void Game::gainLife(PlayerID target, int amount) {
-    state->getPlayerData(target).currentHealth += amount;
+    state.getPlayerData(target).currentHealth += amount;
 }
 
 int Game::getHandSize(PlayerID player) const {
-    return static_cast<int>(state->getPlayerData(player).handContents.size());
+    return static_cast<int>(state.getImmutablePlayerData(player).handContents.size());
 }
 
 int Game::getMana(PlayerID player) const {
-    return state->getPlayerData(player).currentMana;
+    return state.getImmutablePlayerData(player).currentMana;
 }
 
 /**
@@ -478,8 +472,8 @@ int Game::getMana(PlayerID player) const {
  */
 void Game::printGameState() const {
     PlayerID opponent = PlayerIDUtils::getOpponent(localPlayer);
-    const auto& myData = state->getPlayerData(localPlayer);
-    const auto& oppData = state->getPlayerData(opponent);
+    const auto& myData = state.getImmutablePlayerData(localPlayer);
+    const auto& oppData = state.getImmutablePlayerData(opponent);
 
     std::cout << "\n\n OPPONENT: " << oppData.currentHealth << " HP | "
               << static_cast<int>(oppData.currentMana) << " mana | "

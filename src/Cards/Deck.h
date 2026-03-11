@@ -11,12 +11,10 @@ class Deck {
 public:
     // Constructor for empty deck
     Deck();
-    // Constructor for Deck object with encrypted cards + local keys. vector should be sorted with top card at index 0
-    explicit Deck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
+    [[deprecated("No currently known usage")]] explicit Deck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
     // Constructor for a vector of plaintext card IDs (plaintext deck)
     explicit Deck(const std::vector<CardID>& plaintextDeck);
-    void setPlaintextContents(const std::unordered_map<CardID, uint8_t>& deckContents);
-    void setPlaintextContents(const std::vector<CardID>& deckContents);
+    void setEncryptedContents(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
 
     // Setters
     bool addOpponentKey(uint8_t index, const Scalar& remoteKey);
@@ -25,6 +23,7 @@ public:
     bool addUnencryptedCard(CardID id, uint8_t index = 0);
     // Add encrypted card without keys (e.g., because of opponent's Brainstorm/Donation effect)
     bool addCardSolelyEncryptedByOpponent(const Point& cardCiphertext, uint8_t index = 0);
+    // As above, but with the local player's Brainstorm/Donation effects
     bool addCardSolelyEncryptedLocally(CardID id, const Scalar& localKey, uint8_t index = 0);
     bool fullyDecrypt(std::queue<Scalar>& remoteKeys);
     [[nodiscard]] std::optional<CardID> draw();
@@ -51,8 +50,12 @@ private:
 
     // Ordered top-to-bottom, meaning index 0 = top of deck
     std::vector<CardEntry> contents;
-    // key = card ID, val = quantity present. Tracks deck contents irrespective of order.
-    // For example, if contents = {BOLT, ELIXIR, BOLT} (encrypted), plaintextContents = { {BOLT, 2}, {ELIXIR, 1} }
+    /**
+     * key = card ID, val = quantity present. Tracks deck contents irrespective of order.
+     * For example, if contents = {BOLT, ELIXIR, BOLT} (encrypted), plaintextContents = { {BOLT, 2}, {ELIXIR, 1} }
+     * This is exclusively used for tracking the local player's deck contents for shuffling and similar actions.
+     * Accordingly, it should be left untouched for the remote deck.
+     */
     std::unordered_map<CardID, uint8_t> plaintextContents;
     const LookupTable& lookupTable;
     // TODO: should we add "Freshly Shuffled" tracker which, when false, prevents calling fullyDecrypt?
