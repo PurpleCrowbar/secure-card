@@ -1,13 +1,9 @@
-// TODO: reorder these includes as per Google/LLVM style
-#include "Cryptosystem.h"
-#include <sodium.h>
-#include <SFML/Network.hpp>
 #include <iostream>
-#include <array>
-#include <vector>
 #include <string>
-#include <unordered_map>
-#include <stdexcept>
+#include <vector>
+#include <SFML/Network.hpp>
+#include <sodium.h>
+#include "Cryptosystem.h"
 #include "Game/Game.h"
 
 int main(const int argc, char** argv) {
@@ -28,7 +24,6 @@ int main(const int argc, char** argv) {
     else network.connect("127.0.0.1", PORT);
 
     // TODO: Implement DeckSelector which allows player to get deck from some menu
-    // In this case, however, just use standard deck of 15 bolts
     std::vector<CardID> selectedDeck;
     for (int i = 0; i < 10; i++) {
         selectedDeck.push_back(CardID::LIGHTNING_BOLT);
