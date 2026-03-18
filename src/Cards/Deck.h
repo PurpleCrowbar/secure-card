@@ -2,7 +2,6 @@
 #include "CardID.h"
 #include "LookupTable.h"
 #include <optional>
-#include <queue>
 #include <set>
 #include <variant>
 #include <vector>
@@ -25,7 +24,7 @@ public:
     bool addCardSolelyEncryptedByOpponent(const Point& cardCiphertext, uint8_t index = 0);
     // As above, but with the local player's Brainstorm/Donation effects
     bool addCardSolelyEncryptedLocally(CardID id, const Scalar& localKey, uint8_t index = 0);
-    bool fullyDecrypt(std::queue<Scalar>& remoteKeys);
+    bool fullyDecrypt(const std::vector<Scalar>& remoteKeys);
     [[nodiscard]] std::optional<CardID> draw();
     std::optional<CardID> removeCardAtIndex(uint8_t index);
     bool setKnownToOpponent(uint8_t index, bool known = true);

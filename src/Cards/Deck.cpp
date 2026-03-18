@@ -116,12 +116,12 @@ bool Deck::addCardSolelyEncryptedLocally(CardID id, const Scalar &localKey, uint
  * @param remoteKeys Queue of keys from the remote player.
  * @return True if successfully decrypted whole deck, else false
  */
-bool Deck::fullyDecrypt(std::queue<Scalar>& remoteKeys) {
+bool Deck::fullyDecrypt(const std::vector<Scalar>& remoteKeys) {
     if (remoteKeys.size() != contents.size()) return false;
 
-    for (auto& cardEntry : contents) {
-        cardEntry.keys.second = remoteKeys.front();
-        remoteKeys.pop();
+    for (size_t i = 0; i < contents.size(); i++) {
+        auto& cardEntry = contents[i];
+        cardEntry.keys.second = remoteKeys[i];
 
         Point pointRep = std::get<Point>(cardEntry.card);
         auto cardID = lookupTable.getCardID(
