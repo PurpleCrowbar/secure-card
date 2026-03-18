@@ -25,12 +25,8 @@ int main(const int argc, char** argv) {
 
     // TODO: Implement DeckSelector which allows player to get deck from some menu
     std::vector<CardID> selectedDeck;
-    for (int i = 0; i < 10; i++) {
-        selectedDeck.push_back(CardID::LIGHTNING_BOLT);
-    }
-    for (int i = 0; i < 5; i++) {
-        selectedDeck.push_back(CardID::DISORGANIZE);
-    }
+    for (int i = 0; i < 10; i++) selectedDeck.push_back(CardID::LIGHTNING_BOLT);
+    for (int i = 0; i < 5; i++) selectedDeck.push_back(CardID::DISORGANIZE);
 
     Game game(network, isHost ? PlayerID::ONE : PlayerID::TWO, selectedDeck);
     game.run();
