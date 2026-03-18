@@ -1,11 +1,11 @@
 #pragma once
+#include <array>
+#include <optional>
+#include <vector>
 #include "../Cards/CardID.h"
 #include "../Cards/Deck.h"
 #include "../Cryptosystem.h"
 #include "../PlayerID.h"
-#include <array>
-#include <optional>
-#include <vector>
 
 // TODO: Add source file to this class; it's outgrown this header
 /**
@@ -26,7 +26,7 @@ public:
     // Individual player data. The GameState possesses a PlayerData for each of the two players
     struct PlayerData {
         PlayerData() = default;
-        // This specific constructor currently unused
+        // NOTE: This specific constructor currently unused
         PlayerData(const std::vector<std::pair<Point, Scalar>>& encryptedDeck)
             : deck(encryptedDeck) {}
         PlayerData(const std::vector<CardID>& plaintextDeck)
