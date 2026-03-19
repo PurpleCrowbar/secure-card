@@ -9,7 +9,6 @@
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
-
 #include "Constants.h"
 #include "Cards/CardID.h"
 
@@ -17,7 +16,7 @@ constexpr std::size_t SCALAR_BYTES = crypto_core_ristretto255_SCALARBYTES;      
 constexpr std::size_t POINT_BYTES = crypto_core_ristretto255_BYTES;             // 32
 constexpr std::size_t HASH_INPUT_BYTES = crypto_core_ristretto255_HASHBYTES;    // 64
 
-// TODO: rename Scalar and Point to Key and CardPoint respectively
+// TODO: rename Scalar and Point to Key and CardPoint respectively?
 using Scalar = std::array<unsigned char, SCALAR_BYTES>;
 using Point = std::array<unsigned char, POINT_BYTES>;
 using Nonce = uint8_t;
@@ -61,7 +60,6 @@ inline Point encodeToPoint(CardID id, Nonce nonce = 0) {
         nullptr, 0
     );
     Point result;
-    // TODO: libsodium is a C library so this function isn't constexpr. very, very unfortunate; is there a solution?
     crypto_core_ristretto255_from_hash(result.data(), hashInput.data());
     return result;
 }

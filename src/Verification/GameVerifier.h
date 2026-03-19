@@ -4,6 +4,7 @@
 #include "GameAction.h"
 #include "../Commitments/Commitment.h"
 #include "../Cryptosystem.h"
+#include "../DeckCommitment.h"
 
 /**
  * Runs after the game is over. Detects cheating by verifying all game actions against a perfect-knowledge game state.
@@ -13,22 +14,28 @@ public:
     GameVerifier(const std::map<CardID, uint8_t>& localDeckContents, PlayerID localPlayer);
 
     void initialiseOpponentDeck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
-    [[nodiscard]] bool fullyDecryptInitialOpponentDeck(const std::vector<Scalar>& remoteKeys);
     void setPlayerGoingFirst(PlayerID playerId);
 
     void addAction(ActionEntry action);
     void addEnemyCommitment(std::unique_ptr<Commitment> commitment);
 
-    // End of game
-    void logLocalShuffleSeed(PlayerID deckOwner, ShuffleSeed seed); // log one of our shuffle seeds for either deck
-    void addAllRemoteShuffleSeeds(PlayerID deckOwner, const std::vector<ShuffleSeed>& remoteSeeds); // add all remote shuffle seeds after the game
-    [[nodiscard]] bool decryptEnemyCommitments(const std::vector<std::vector<Scalar>>& keys);
+    // Deck commitment (keyed hash of deck contents)
+    void setLocalDeckCommitmentKey(const DeckHashKey& key);
+    void setRemoteDeckCommitment(const DeckHash& hash);
+    [[nodiscard]] const DeckHashKey& getLocalDeckCommitmentKey() const;
+    [[nodiscard]] bool verifyRemoteDeckContents(const DeckHashKey& remoteKey, const std::map<CardID, uint8_t>& remoteDeckContents) const;
 
-    // Getters
-    [[nodiscard]] const std::vector<std::vector<Scalar>>& getLocalCommitmentKeys() const;
+    // Shuffle seeds
+    void logLocalShuffleSeed(PlayerID deckOwner, ShuffleSeed seed);
+    void addAllRemoteShuffleSeeds(PlayerID deckOwner, const std::vector<ShuffleSeed>& remoteSeeds);
     [[nodiscard]] std::vector<ShuffleSeed> getLocalShuffleSeedsForOurDeck() const;
     [[nodiscard]] std::vector<ShuffleSeed> getLocalShuffleSeedsForOpponentsDeck() const;
 
+    // Commitment keys
+    [[nodiscard]] bool decryptEnemyCommitments(const std::vector<std::vector<Scalar>>& keys);
+    [[nodiscard]] const std::vector<std::vector<Scalar>>& getLocalCommitmentKeys() const;
+
+    // TODO: this could return a sophisticated, custom error type
     [[nodiscard]] bool run();
 
 private:
@@ -49,4 +56,8 @@ private:
     std::vector<std::vector<Scalar>> localCommitmentKeys;
     ShuffleSeeds ourDeckSeeds;
     ShuffleSeeds opponentDeckSeeds;
+
+    // Deck commitment data
+    DeckHashKey localDeckCommitmentKey {}; // our random key for our deck hash. revealed to opponent at game end
+    DeckHash remoteDeckCommitment {}; // opponent's deck hash, received at game start
 };

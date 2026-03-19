@@ -32,6 +32,8 @@ public:
     [[nodiscard]] int getMana(PlayerID player) const;
 
 private:
+    // Pre-game: both players commit to their deck contents via keyed hash
+    void exchangeDeckCommitments();
     // Called at the start of each turn; resets mana, draws a card
     void startTurn();
     // switches state.activePlayer to the other player
@@ -44,8 +46,13 @@ private:
     void handleOpponentPlayCard();
     void printGameState() const;
 
+    // post-game: exchange all secret data and run the verifier
+    void postGameExchangeAndVerify();
+
     GameState state;
     Network& network;
     PlayerID localPlayer;
     GameVerifier verifier;
+    // Local player's deck's contents from the start of the game. Sent post-game for verification
+    const std::map<CardID, uint8_t> localDeckContents;
 };

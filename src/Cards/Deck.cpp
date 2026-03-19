@@ -114,30 +114,6 @@ bool Deck::addCardSolelyEncryptedLocally(CardID id, const Scalar &localKey, uint
     return true;
 }
 
-// TODO: Must be updated to return enum with possible vals { Success, InvalidKeyCount, DeckCorrupted }
-/**
- * Fully decrypts the deck. <b>May only be used on an unmodified, newly-shuffled deck during the verification phase.</b>
- * Using this function on a deck that doesn't meet that criteria will result in it becoming corrupted.
- * @param remoteKeys Queue of keys from the remote player.
- * @return True if successfully decrypted whole deck, else false
- */
-bool Deck::fullyDecrypt(const std::vector<Scalar>& remoteKeys) {
-    if (remoteKeys.size() != contents.size()) return false;
-
-    for (size_t i = 0; i < contents.size(); i++) {
-        auto& cardEntry = contents[i];
-        cardEntry.keys.second = remoteKeys[i];
-
-        Point pointRep = std::get<Point>(cardEntry.card);
-        auto cardID = lookupTable.getCardID(
-            decrypt(pointRep, cardEntry.keys.first.value(), cardEntry.keys.second.value())
-        );
-        if (!cardID.has_value()) return false;
-        cardEntry.card = cardID.value();
-    }
-    return true;
-}
-
 // TODO: Must be updated to return std::expected<CardID, DeckQueryErrorEnum>, which requires update to C++23
 /**
  * Returns the card ID of the top card of the deck, then removes it from the deck.\n

@@ -92,6 +92,26 @@ uint16_t Network::receiveUint16() {
     return static_cast<uint16_t>((bytes[0] << 8) | bytes[1]);
 }
 
+void Network::sendUint32(uint32_t val) {
+    uint8_t bytes[4] = {
+        static_cast<uint8_t>((val >> 24) & 0xFF),
+        static_cast<uint8_t>((val >> 16) & 0xFF),
+        static_cast<uint8_t>((val >> 8) & 0xFF),
+        static_cast<uint8_t>(val & 0xFF),
+    };
+    sendAll(bytes, 4);
+}
+
+uint32_t Network::receiveUint32() {
+    uint8_t bytes[4];
+    receiveAll(bytes, 4);
+    // read each of the four bytes into a single uint32_t
+    return static_cast<uint32_t>(bytes[0]) << 24
+         | static_cast<uint32_t>(bytes[1]) << 16
+         | static_cast<uint32_t>(bytes[2]) << 8
+         | static_cast<uint32_t>(bytes[3]);
+}
+
 // Points and Scalars are just 32 byte arrays (in ristretto255)
 void Network::sendPoint(const Point& p) {
     sendAll(p.data(), POINT_BYTES);
@@ -138,6 +158,11 @@ std::vector<Point> Network::receivePoints() {
     return result;
 }
 
+/**
+ * Sends a vector of keys (scalars) to the other player. First byte is the number of scalars sent, rest of
+ * data is the 32 byte scalars themselves.
+ * @param scalars Vector of keys (scalars)
+ */
 void Network::sendScalars(const std::vector<Scalar>& scalars) {
     sendUint8(static_cast<uint8_t>(scalars.size()));
     for (const auto& s : scalars) {
@@ -145,13 +170,101 @@ void Network::sendScalars(const std::vector<Scalar>& scalars) {
     }
 }
 
-// TODO: should return queue instead of vector?
 std::vector<Scalar> Network::receiveScalars() {
     uint8_t count = receiveUint8();
     std::vector<Scalar> result;
     result.reserve(count);
     for (uint8_t i = 0; i < count; i++) {
         result.push_back(receiveScalar());
+    }
+    return result;
+}
+
+void Network::sendDeckHash(const DeckHash& hash) {
+    sendAll(hash.data(), DECK_HASH_BYTES);
+}
+
+DeckHash Network::receiveDeckHash() {
+    DeckHash hash;
+    receiveAll(hash.data(), DECK_HASH_BYTES);
+    return hash;
+}
+
+void Network::sendDeckHashKey(const DeckHashKey& key) {
+    sendAll(key.data(), DECK_HASH_KEY_BYTES);
+}
+
+DeckHashKey Network::receiveDeckHashKey() {
+    DeckHashKey key;
+    receiveAll(key.data(), DECK_HASH_KEY_BYTES);
+    return key;
+}
+
+/**
+ * Sends a vector of shuffle seeds. First byte of data is number of seeds being sent, rest of the data is the
+ * 32 bit seeds themselves.
+ * @param seeds Vector of shuffle seeds
+ */
+void Network::sendShuffleSeeds(const std::vector<ShuffleSeed>& seeds) {
+    sendUint8(static_cast<uint8_t>(seeds.size()));
+    for (const auto& seed : seeds) {
+        sendUint32(seed);
+    }
+}
+
+std::vector<ShuffleSeed> Network::receiveShuffleSeeds() {
+    uint8_t count = receiveUint8();
+    std::vector<ShuffleSeed> result;
+    result.reserve(count);
+    for (uint8_t i = 0; i < count; i++) {
+        result.push_back(receiveUint32());
+    }
+    return result;
+}
+
+/**
+ * Sends plaintext deck contents. First byte is number of different card IDs; rest of data is 3-byte chunks which
+ * contain the card ID (2 bytes) and the quantity present in the deck (1 byte).
+ * @param contents Deck contents in map form
+ */
+void Network::sendDeckContents(const std::map<CardID, uint8_t>& contents) {
+    sendUint8(static_cast<uint8_t>(contents.size()));
+    for (const auto& [id, qty] : contents) {
+        sendUint16(static_cast<uint16_t>(id));
+        sendUint8(qty);
+    }
+}
+
+std::map<CardID, uint8_t> Network::receiveDeckContents() {
+    uint8_t count = receiveUint8();
+    std::map<CardID, uint8_t> contents;
+    for (uint8_t i = 0; i < count; i++) {
+        auto id = static_cast<CardID>(receiveUint16());
+        uint8_t qty = receiveUint8();
+        contents[id] = qty;
+    }
+    return contents;
+}
+
+/**
+ * Sends a vector of subvectors which contain commitment keys. Each subvector pertains to a single commitment.
+ * First byte is the number of subvectors. See sendScalars method for rest of data transmitted.
+ * This function is called at the end of the game, right before verification begins.
+ * @param commitmentKeys Vector of subvectors containing commitment keys. Each subvector contains the keys for one commitment.
+ */
+void Network::sendCommitmentKeys(const std::vector<std::vector<Scalar>>& commitmentKeys) {
+    sendUint8(static_cast<uint8_t>(commitmentKeys.size()));
+    for (const auto& inner : commitmentKeys) {
+        sendScalars(inner);
+    }
+}
+
+std::vector<std::vector<Scalar>> Network::receiveCommitmentKeys() {
+    uint8_t outerCount = receiveUint8();
+    std::vector<std::vector<Scalar>> result;
+    result.reserve(outerCount);
+    for (uint8_t i = 0; i < outerCount; i++) {
+        result.push_back(receiveScalars());
     }
     return result;
 }

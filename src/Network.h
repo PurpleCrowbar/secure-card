@@ -1,9 +1,12 @@
 #pragma once
-#include <vector>
 #include <cstdint>
+#include <vector>
+#include <map>
 #include <string>
 #include <SFML/Network.hpp>
 #include "Cryptosystem.h"
+#include "DeckCommitment.h"
+#include "Cards/CardID.h"
 
 enum class PacketType : uint8_t {
     PLAY_CARD = 1,  // uint16_t card ID always comes after
@@ -30,6 +33,8 @@ public:
     uint8_t receiveUint8();
     void sendUint16(uint16_t val);
     uint16_t receiveUint16();
+    void sendUint32(uint32_t val);
+    uint32_t receiveUint32();
 
     void sendPoint(const Point& p);
     Point receivePoint();
@@ -39,6 +44,18 @@ public:
     std::vector<Point> receivePoints();
     void sendScalars(const std::vector<Scalar>& scalars);
     std::vector<Scalar> receiveScalars();
+
+    // Post-game verification helpers
+    void sendDeckHash(const DeckHash& hash);
+    DeckHash receiveDeckHash();
+    void sendDeckHashKey(const DeckHashKey& key);
+    DeckHashKey receiveDeckHashKey();
+    void sendShuffleSeeds(const std::vector<ShuffleSeed>& seeds);
+    std::vector<ShuffleSeed> receiveShuffleSeeds();
+    void sendDeckContents(const std::map<CardID, uint8_t>& contents);
+    std::map<CardID, uint8_t> receiveDeckContents();
+    void sendCommitmentKeys(const std::vector<std::vector<Scalar>>& commitmentKeys);
+    std::vector<std::vector<Scalar>> receiveCommitmentKeys();
 
     // most commonly used in the Game loop
     void sendPacketType(PacketType type);

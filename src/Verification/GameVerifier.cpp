@@ -7,11 +7,6 @@ void GameVerifier::initialiseOpponentDeck(const std::vector<std::pair<Point, Sca
     state.getOpponentPlayerData(localPlayer).deck.setEncryptedContents(encryptedDeck);
 }
 
-// TODO: Delete this? Vestige of old deck-shuffle-tracking system.
-bool GameVerifier::fullyDecryptInitialOpponentDeck(const std::vector<Scalar>& remoteKeys) {
-    return state.getOpponentPlayerData(localPlayer).deck.fullyDecrypt(remoteKeys);
-}
-
 void GameVerifier::setPlayerGoingFirst(PlayerID playerId) {
     state.activePlayer = playerId;
 }
@@ -32,6 +27,28 @@ void GameVerifier::addAction(ActionEntry action) {
  */
 void GameVerifier::addEnemyCommitment(std::unique_ptr<Commitment> commitment) {
     enemyCommitments.push_back(std::move(commitment));
+}
+
+void GameVerifier::setLocalDeckCommitmentKey(const DeckHashKey& key) {
+    localDeckCommitmentKey = key;
+}
+
+void GameVerifier::setRemoteDeckCommitment(const DeckHash& hash) {
+    remoteDeckCommitment = hash;
+}
+
+const DeckHashKey& GameVerifier::getLocalDeckCommitmentKey() const {
+    return localDeckCommitmentKey;
+}
+
+/**
+ * Verifies that the opponent's revealed deck contents and key match the hash they committed to at game start.
+ * @param remoteKey Key revealed by opponent at game end
+ * @param remoteDeckContents Deck contents revealed by opponent at game end
+ * @return True if the commitment is valid (opponent didn't modify their deck), else false
+ */
+bool GameVerifier::verifyRemoteDeckContents(const DeckHashKey& remoteKey, const std::map<CardID, uint8_t>& remoteDeckContents) const {
+    return verifyDeckCommitment(remoteDeckCommitment, remoteKey, remoteDeckContents);
 }
 
 /**
