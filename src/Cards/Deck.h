@@ -1,6 +1,7 @@
 #pragma once
 #include "CardID.h"
 #include "LookupTable.h"
+#include <map>
 #include <optional>
 #include <set>
 #include <variant>
@@ -24,6 +25,7 @@ public:
     bool addCardSolelyEncryptedByOpponent(const Point& cardCiphertext, uint8_t index = 0);
     // As above, but with the local player's Brainstorm/Donation effects
     bool addCardSolelyEncryptedLocally(CardID id, const Scalar& localKey, uint8_t index = 0);
+    // TODO: May now be redundant. Verify and delete if so.
     bool fullyDecrypt(const std::vector<Scalar>& remoteKeys);
     [[nodiscard]] std::optional<CardID> draw();
     std::optional<CardID> removeCardAtIndex(uint8_t index);
@@ -35,8 +37,12 @@ public:
     [[nodiscard]] uint8_t getSize() const;
     [[nodiscard]] std::set<uint8_t> getIndicesOfCardsSolelyEncryptedByOpponent() const;
     [[nodiscard]] std::set<uint8_t> getIndicesOfCardsSolelyEncryptedLocally() const;
-    [[nodiscard]] std::unordered_map<CardID, uint8_t> getContents() const;
+    [[nodiscard]] std::map<CardID, uint8_t> getContents() const;
     [[nodiscard]] bool isKnownToOpponent(uint8_t index) const;
+
+    // Methods used during post-game verification
+    void v_setPlaintextContents(const std::map<CardID, uint8_t>& newPlaintextContents);
+    bool v_shuffleWithSeeds(ShuffleSeed ownerSeed, ShuffleSeed enemySeed);
 
 private:
     struct CardEntry {
@@ -55,7 +61,6 @@ private:
      * This is exclusively used for tracking the local player's deck contents for shuffling and similar actions.
      * Accordingly, it should be left untouched for the remote deck.
      */
-    std::unordered_map<CardID, uint8_t> plaintextContents;
+    std::map<CardID, uint8_t> plaintextContents;
     const LookupTable& lookupTable;
-    // TODO: should we add "Freshly Shuffled" tracker which, when false, prevents calling fullyDecrypt?
 };

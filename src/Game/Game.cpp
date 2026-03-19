@@ -6,7 +6,8 @@
 #include <random>
 
 Game::Game(Network& network, PlayerID localPlayer, const std::vector<CardID>& localDeck)
-    : state(localDeck, localPlayer), network(network), localPlayer(localPlayer) {}
+    : state(localDeck, localPlayer), network(network),
+    localPlayer(localPlayer), verifier(localDeck, localPlayer) {}
 
 void Game::run() {
     std::cout << "\n=== Shuffling decks ===\n";
@@ -19,6 +20,7 @@ void Game::run() {
 
     // TODO: coin flip here determines who goes first
     state.activePlayer = PlayerID::ONE;
+    verifier.setPlayerGoingFirst(state.activePlayer.value());
     std::cout << "\n=== Game starting! ===\n";
 
     // First turn doesn't draw (like MtG: player going first skips first draw)
@@ -81,10 +83,13 @@ std::vector<std::pair<Point, Scalar>> Game::performShuffle(PlayerID deckOwner) {
     // if the local player owns the deck being shuffled
     if (localPlayerIsShuffling) {
         auto deckPoints = convertCardsToPoints(state.getImmutablePlayerData(deckOwner).deck.getContents());
-        // initial bulk encryption with single key followed by shuffle
+        // initial bulk encryption with single key
         auto bulkKey = generateKeyPair();
         encryptDeckWithKey(deckPoints, bulkKey.k);
-        shuffleDeck(deckPoints);
+        // shuffle the deck before sending to opponent
+        ShuffleSeed seed = randombytes_uniform(UINT32_MAX);
+        shuffleDeck(deckPoints, seed);
+        verifier.logLocalShuffleSeed(deckOwner, seed);
 
         // send 1-layer encryption deck to opponent
         std::cout << "  [Shuffle] Sending bulk-encrypted deck to opponent... (" << deckPoints.size() << " cards)\n";
@@ -122,20 +127,20 @@ std::vector<std::pair<Point, Scalar>> Game::performShuffle(PlayerID deckOwner) {
         for (const auto& [ct, key] : reEncrypted) {
             result.emplace_back(ct, key.k_inv);
         }
+
+        verifier.addAction(Action::Shuffle(deckOwner));
         return result;
     // if it's the opponent's deck being shuffled
     } else {
         // receive the owner's bulk-encrypted, shuffled deck
         auto received = network.receivePoints();
         std::cout << "  [Shuffle] Received opponent's encrypted deck (" << received.size() << " cards)\n";
-        // encrypt each card with a unique per-card key, then shuffle
+        // shuffle the deck
+        ShuffleSeed seed = randombytes_uniform(UINT32_MAX);
+        shuffleDeck(received, seed);
+        verifier.logLocalShuffleSeed(deckOwner, seed);
+        // encrypt each card with a unique per-card key,
         auto withKeys = encryptDeckWithIndividualKeys(received);
-        // mini scope here to get rid of randomisers when we're done with them
-        {
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::ranges::shuffle(withKeys, gen);
-        }
 
         // now that we've uniquely encrypted each card and shuffled the deck, send it back to its owner
         std::vector<Point> ciphertextsToSend;
@@ -157,6 +162,8 @@ std::vector<std::pair<Point, Scalar>> Game::performShuffle(PlayerID deckOwner) {
         for (std::size_t i = 0; i < finalDeck.size(); i++) {
             result.emplace_back(finalDeck[i], withKeys[i].second.k_inv);
         }
+
+        verifier.addAction(Action::Shuffle(deckOwner));
         return result;
     }
 }
@@ -237,6 +244,7 @@ void Game::drawCards(PlayerID player, uint8_t count) {
 
         std::cout << "  [Draw] Opponent drew " << std::to_string(totalCardsToDraw) << " card" << (totalCardsToDraw == 1 ? "" : "s") << ".\n";
     }
+    verifier.addAction(Action::DrawCards(player, count));
 }
 
 void Game::startTurn() {
@@ -248,6 +256,7 @@ void Game::startTurn() {
 }
 
 void Game::advanceTurn() {
+    verifier.addAction(Action::EndTurn(state.activePlayer.value()));
     state.activePlayer = PlayerIDUtils::getOpponent(state.activePlayer.value());
 }
 
@@ -342,6 +351,7 @@ void Game::playCardLocal(int handIndex) {
     }
 
     std::cout << "  -> Playing " << card->getName() << "!\n";
+    verifier.addAction(Action::PlayCard(localPlayer, cardId));
     // pay mana
     myData.currentMana -= card->getManaCost();
     // delete from hand
@@ -410,6 +420,7 @@ void Game::handleOpponentPlayCard() {
 
     network.sendPacketType(PacketType::PERMITTED);
     std::cout << "  Opponent plays " << card->getName() << "!\n";
+    verifier.addAction(Action::PlayCard(PlayerIDUtils::getOpponent(localPlayer), cardId));
 
     // opponent spent mana
     oppData.currentMana -= card->getManaCost();
@@ -453,10 +464,12 @@ void Game::dealDamage(PlayerID target, int amount) {
         std::cout << "  -> Opponent takes " << amount << " damage! ("
                   << data.currentHealth << " HP remaining)\n";
     }
+    verifier.addAction(Action::DealDamage(target, amount));
 }
 
 void Game::gainLife(PlayerID target, int amount) {
     state.getPlayerData(target).currentHealth += amount;
+    verifier.addAction(Action::GainLife(target, amount));
 }
 
 int Game::getHandSize(PlayerID player) const {

@@ -255,7 +255,7 @@ std::set<uint8_t> Deck::getIndicesOfCardsSolelyEncryptedLocally() const {
 /**
  * @return The known plaintext contents of the deck. Key = card ID, value = quantity present
  */
-std::unordered_map<CardID, uint8_t> Deck::getContents() const {
+std::map<CardID, uint8_t> Deck::getContents() const {
     return plaintextContents;
 }
 
@@ -267,4 +267,39 @@ std::unordered_map<CardID, uint8_t> Deck::getContents() const {
 bool Deck::isKnownToOpponent(uint8_t index) const {
     if (index >= contents.size()) [[unlikely]] return false;
     return contents[index].knownToOpponent;
+}
+
+/**
+ * Exclusively called when preparing the game verifier. <b>Should never be called during gameplay.</b> Only updates the
+ * plaintextContents map, does <b>not</b> update the vector of card entries in this deck.
+ * @param newPlaintextContents New plaintext contents of deck
+ */
+void Deck::v_setPlaintextContents(const std::map<CardID, uint8_t>& newPlaintextContents) {
+    plaintextContents = newPlaintextContents;
+}
+
+/**
+ * Called during the verification phase <b>only</b>. Shuffles the deck using its plaintext contents and the two
+ * shuffle seeds used during gameplay.
+ * @param ownerSeed Shuffle seed used by this deck's owner
+ * @param enemySeed Shuffle seed used by the enemy of this deck's owner
+ * @return True if successful, false if plaintextContents empty
+ */
+bool Deck::v_shuffleWithSeeds(ShuffleSeed ownerSeed, ShuffleSeed enemySeed) {
+    if (plaintextContents.empty()) return false;
+
+    std::vector<CardID> cards;
+    for (const auto& [id, quantity] : plaintextContents) {
+        for (uint8_t i = 0; i < quantity; ++i) {
+            cards.push_back(id);
+        }
+    }
+    shuffleDeck(cards, ownerSeed);
+    shuffleDeck(cards, enemySeed);
+
+    contents.reserve(cards.size());
+    for (const auto& cardID : cards) {
+        contents.push_back({cardID, { std::nullopt, std::nullopt }});
+    }
+    return true;
 }

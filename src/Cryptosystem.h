@@ -1,13 +1,12 @@
 #pragma once
+#include <cstddef>
 #include <algorithm>
 #include <sodium.h>
 #include <array>
-#include <cstddef>
+#include <map>
 #include <iomanip>
-#include <iostream>
 #include <random>
 #include <stdexcept>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -22,6 +21,7 @@ constexpr std::size_t HASH_INPUT_BYTES = crypto_core_ristretto255_HASHBYTES;    
 using Scalar = std::array<unsigned char, SCALAR_BYTES>;
 using Point = std::array<unsigned char, POINT_BYTES>;
 using Nonce = uint8_t;
+using ShuffleSeed = uint32_t;
 
 struct PHKeyPair {
     Scalar k;
@@ -117,9 +117,9 @@ inline Point decrypt(const Point& ciphertext, const Scalar& localKey, const Scal
 /**
  * Converts the plaintext contents of a deck into their card-point forms with random, unique nonces applied
  * @param cards Map of card IDs to convert. Key = card ID, val = quantity to process
- * @return Unordered vector of card-point representations
+ * @return Ordered vector of card-point representations
  */
-inline std::vector<Point> convertCardsToPoints(const std::unordered_map<CardID, uint8_t>& cards) {
+inline std::vector<Point> convertCardsToPoints(const std::map<CardID, uint8_t>& cards) {
     std::vector<Point> deck;
     for (const auto& [cardId, quantity] : cards) {
         std::unordered_set<Nonce> usedNonces;
@@ -135,13 +135,13 @@ inline std::vector<Point> convertCardsToPoints(const std::unordered_map<CardID, 
 
 /**
  * <b>This is not a networked function and should never be used in card resolutions.</b> This <i>only</i> shuffles a
- * local vector. Should only be called after encrypting a vector of plaintext card-points with a single key.
- * See Mental Poker protocol.
+ * local vector. Randomises the order of items in a vector using a given seed.
  * @param deck Reference to vector of card-points to be shuffled
+ * @param seed Shuffle seed to use
  */
-inline void shuffleDeck(std::vector<Point>& deck) {
-    std::random_device rd;
-    std::mt19937 gen(rd());
+template <typename T>
+void shuffleDeck(std::vector<T>& deck, ShuffleSeed seed) {
+    std::mt19937 gen(seed);
     std::ranges::shuffle(deck, gen);
 }
 
@@ -174,7 +174,7 @@ inline std::vector<std::pair<Point, PHKeyPair>> encryptDeckWithIndividualKeys(co
 
     for (const auto& card : deck) {
         auto key = generateKeyPair();
-        newDeck.push_back({encrypt(card, key.k), key});
+        newDeck.emplace_back(encrypt(card, key.k), key);
     }
 
     return newDeck;

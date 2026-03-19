@@ -5,6 +5,7 @@
 #include "GameState.h"
 #include "../Network.h"
 #include "../PlayerID.h"
+#include "../Verification/GameVerifier.h"
 
 class Card;
 
@@ -15,12 +16,12 @@ public:
     // Runs game lifecycle (initial shuffle, draw opening hands, main game loop)
     void run();
 
-    // Mutative methods used by cards' resolve methods
+    // Game actions. Mutative methods used by cards' resolve methods
     void dealDamage(PlayerID target, int amount);
+    void gainLife(PlayerID target, int amount);
     // Exchanges keys and draws cards. Both players call with the same arguments.
     // The drawing player receives keys; the other player sends keys.
     void drawCards(PlayerID player, uint8_t count);
-    void gainLife(PlayerID target, int amount);
     // Runs the mental poker shuffle protocol for one player's deck, both
     // players call this with the same deckOwner argument
     std::vector<std::pair<Point, Scalar>> performShuffle(PlayerID deckOwner);
@@ -46,5 +47,5 @@ private:
     GameState state;
     Network& network;
     PlayerID localPlayer;
-    // TODO: add Verifier which logs shuffled decks, commitments, etc
+    GameVerifier verifier;
 };
