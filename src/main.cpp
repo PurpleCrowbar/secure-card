@@ -24,9 +24,9 @@ int main(const int argc, char** argv) {
     else network.connect("127.0.0.1", PORT);
 
     // TODO: Implement DeckSelector which allows player to get deck from some menu
-    std::vector<CardID> selectedDeck;
-    for (int i = 0; i < 10; i++) selectedDeck.push_back(CardID::LIGHTNING_BOLT);
-    for (int i = 0; i < 5; i++) selectedDeck.push_back(CardID::DISORGANIZE);
+    std::map<CardID, uint8_t> selectedDeck;
+    selectedDeck[CardID::LIGHTNING_BOLT] = 10;
+    selectedDeck[CardID::DISORGANIZE] = 5;
 
     Game game(network, isHost ? PlayerID::ONE : PlayerID::TWO, selectedDeck);
     game.run();

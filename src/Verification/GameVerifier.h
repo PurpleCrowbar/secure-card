@@ -10,7 +10,7 @@
  */
 class GameVerifier {
 public:
-    GameVerifier(const std::vector<CardID>& localDeck, PlayerID localPlayer);
+    GameVerifier(const std::map<CardID, uint8_t>& localDeckContents, PlayerID localPlayer);
 
     void initialiseOpponentDeck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
     [[nodiscard]] bool fullyDecryptInitialOpponentDeck(const std::vector<Scalar>& remoteKeys);

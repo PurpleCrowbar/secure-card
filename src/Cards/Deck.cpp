@@ -18,13 +18,18 @@ Deck::Deck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck) : lookupT
 /**
  * Plaintext deck constructor. Called at GameState initialisation for the local player's deck. Importantly, this
  * populates the plaintextContents tracker which is critically important for the task of shuffling the deck.
- * @param plaintextDeck Vector of plaintext card IDs
+ * @param plaintextDeckContents Vector of plaintext card IDs
  */
-Deck::Deck(const std::vector<CardID>& plaintextDeck) : lookupTable(LookupTable::instance()) {
-    contents.reserve(plaintextDeck.size());
-    for (const auto& cardID : plaintextDeck) {
-        contents.push_back({cardID, { std::nullopt, std::nullopt }});
-        plaintextContents[cardID]++;
+Deck::Deck(const std::map<CardID, uint8_t>& plaintextDeckContents) : lookupTable(LookupTable::instance()) {
+    if (plaintextDeckContents.empty()) throw std::invalid_argument("[Deck] plaintextDeck passed to constructor is empty");
+
+    std::vector<CardID> cards;
+    for (const auto& [id, quantity] : plaintextDeckContents) {
+        for (uint8_t i = 0; i < quantity; ++i) {
+            plaintextContents[id]++;
+            // TODO: Is this even necessary? Is the contents vector ever accessed before setEncryptedContents is called?
+            contents.push_back({id, { std::nullopt, std::nullopt }});
+        }
     }
 }
 
@@ -297,6 +302,7 @@ bool Deck::v_shuffleWithSeeds(ShuffleSeed ownerSeed, ShuffleSeed enemySeed) {
     shuffleDeck(cards, ownerSeed);
     shuffleDeck(cards, enemySeed);
 
+    contents.clear();
     contents.reserve(cards.size());
     for (const auto& cardID : cards) {
         contents.push_back({cardID, { std::nullopt, std::nullopt }});

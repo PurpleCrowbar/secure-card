@@ -4,7 +4,6 @@
 #include <vector>
 #include "../Cards/CardID.h"
 #include "../Cards/Deck.h"
-#include "../Cryptosystem.h"
 #include "../PlayerID.h"
 
 // TODO: Add source file to this class; it's outgrown this header
@@ -13,28 +12,28 @@
  */
 class GameState {
 public:
-    // Construct GameState with both players' encrypted decks
-    GameState(const std::vector<std::pair<Point, Scalar>>& p1Deck, const std::vector<std::pair<Point, Scalar>>& p2Deck)
-        : playerData { PlayerData(p1Deck), PlayerData(p2Deck) } {}
+    // UNUSED. Construct GameState with both players' encrypted decks
+    //GameState(const std::vector<std::pair<Point, Scalar>>& p1Deck, const std::vector<std::pair<Point, Scalar>>& p2Deck)
+    //    : playerData { PlayerData(p1Deck), PlayerData(p2Deck) } {}
     // Construct GameState with cleartext local deck and empty remote deck
-    GameState(const std::vector<CardID>& localCleartextDeck, PlayerID localPlayer)
+    GameState(const std::map<CardID, uint8_t>& localPlaintextDeckContents, PlayerID localPlayer)
         : playerData {
-            localPlayer == PlayerID::ONE ? PlayerData(localCleartextDeck) : PlayerData(),
-            localPlayer == PlayerID::TWO ? PlayerData(localCleartextDeck) : PlayerData(),
+            localPlayer == PlayerID::ONE ? PlayerData(localPlaintextDeckContents) : PlayerData(),
+            localPlayer == PlayerID::TWO ? PlayerData(localPlaintextDeckContents) : PlayerData(),
         } {}
 
     // Individual player data. The GameState possesses a PlayerData for each of the two players
     struct PlayerData {
         PlayerData() = default;
-        // NOTE: This specific constructor currently unused
-        PlayerData(const std::vector<std::pair<Point, Scalar>>& encryptedDeck)
-            : deck(encryptedDeck) {}
-        PlayerData(const std::vector<CardID>& plaintextDeck)
-            : deck(plaintextDeck) {}
+        // UNUSED PlayerData constructor
+        //PlayerData(const std::vector<std::pair<Point, Scalar>>& encryptedDeck)
+        //    : deck(encryptedDeck) {}
+        PlayerData(const std::map<CardID, uint8_t>& plaintextDeckContents)
+            : deck(plaintextDeckContents) {}
 
         Deck deck;
         // TODO: Could make a Hand class in the future for storing hand contents + visibility states
-        // TODO: should also probably just be real card objects, not card IDs
+        // TODO: Use pointers to card objects instead of card IDs?
         // unknown card in opponent's hand = nullopt. bool = opponent knows (only applies to cards in local player's hand)
         std::vector<std::optional<std::pair<CardID, bool>>> handContents = {};
         uint16_t maxHealth = 20, currentHealth = maxHealth;

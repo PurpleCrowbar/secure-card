@@ -13,7 +13,7 @@ public:
     Deck();
     [[deprecated("No currently known usage")]] explicit Deck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
     // Constructor for a vector of plaintext card IDs (plaintext deck)
-    explicit Deck(const std::vector<CardID>& plaintextDeck);
+    explicit Deck(const std::map<CardID, uint8_t>& plaintextDeckContents);
     void setEncryptedContents(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
 
     // Setters

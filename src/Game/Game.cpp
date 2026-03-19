@@ -5,11 +5,13 @@
 #include <algorithm>
 #include <random>
 
-Game::Game(Network& network, PlayerID localPlayer, const std::vector<CardID>& localDeck)
-    : state(localDeck, localPlayer), network(network),
-    localPlayer(localPlayer), verifier(localDeck, localPlayer) {}
+Game::Game(Network& network, PlayerID localPlayer, const std::map<CardID, uint8_t>& localDeckContents)
+    : state(localDeckContents, localPlayer), network(network),
+    localPlayer(localPlayer), verifier(localDeckContents, localPlayer) {}
 
 void Game::run() {
+    // TODO: exchange Merkle tree roots
+
     std::cout << "\n=== Shuffling decks ===\n";
     state.playerData[0].deck.setEncryptedContents(performShuffle(PlayerID::ONE));
     state.playerData[1].deck.setEncryptedContents(performShuffle(PlayerID::TWO));

@@ -1,7 +1,7 @@
 #include "GameVerifier.h"
 
-GameVerifier::GameVerifier(const std::vector<CardID>& localDeck, PlayerID localPlayer)
-    : state(localDeck, localPlayer), localPlayer(localPlayer) {}
+GameVerifier::GameVerifier(const std::map<CardID, uint8_t>& localDeckContents, PlayerID localPlayer)
+    : state(localDeckContents, localPlayer), localPlayer(localPlayer) {}
 
 void GameVerifier::initialiseOpponentDeck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck) {
     state.getOpponentPlayerData(localPlayer).deck.setEncryptedContents(encryptedDeck);

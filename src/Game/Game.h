@@ -11,7 +11,7 @@ class Card;
 
 class Game {
 public:
-    Game(Network& network, PlayerID localPlayer, const std::vector<CardID>& localDeck);
+    Game(Network& network, PlayerID localPlayer, const std::map<CardID, uint8_t>& localDeckContents);
 
     // Runs game lifecycle (initial shuffle, draw opening hands, main game loop)
     void run();
