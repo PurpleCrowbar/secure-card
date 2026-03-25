@@ -34,5 +34,9 @@ private:
         }
     };
 
+    // NOTE: As of C++26, unordered_map can be constexpr. Being able to generate the lookup table at compile time would
+    // remove the need for serialising to disk. Despite this, libsodium is a C library and thus
+    // crypto_core_ristretto255_from_hash and crypto_generichash can't be made constexpr/consteval.
+    // They would need to be manually re-implemented with C++ syntax for this project.
     std::unordered_map<Point, CardID, PointHash> lookupTable;
 };
