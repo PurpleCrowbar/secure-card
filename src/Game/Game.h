@@ -28,7 +28,6 @@ public:
 
     // Getters
     [[nodiscard]] PlayerID getLocalPlayer() const { return localPlayer; }
-    [[nodiscard]] int getHandSize(PlayerID player) const;
     [[nodiscard]] int getMana(PlayerID player) const;
 
 private:

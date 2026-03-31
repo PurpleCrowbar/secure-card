@@ -13,11 +13,11 @@ class GameVerifier {
 public:
     GameVerifier(const std::map<CardID, uint8_t>& localDeckContents, PlayerID localPlayer);
 
-    void initialiseOpponentDeck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
+    void initialiseOpponentDeck(const std::map<CardID, uint8_t>& plaintextDeckContents);
     void setPlayerGoingFirst(PlayerID playerId);
 
-    void addAction(ActionEntry action);
-    void addEnemyCommitment(std::unique_ptr<Commitment> commitment);
+    void logAction(ActionEntry action);
+    void logEnemyCommitment(std::unique_ptr<Commitment> commitment);
 
     // Deck commitment (keyed hash of deck contents)
     void setLocalDeckCommitmentKey(const DeckHashKey& key);
@@ -39,6 +39,9 @@ public:
     [[nodiscard]] bool run();
 
 private:
+    void v_shuffleLocalDeck(size_t shuffleSeedIndex);
+    void v_shuffleOpponentsDeck(size_t shuffleSeedIndex);
+
     struct ShuffleSeeds {
         std::vector<ShuffleSeed> local; // seeds we generated
         std::vector<ShuffleSeed> remote; // seeds opponent generated (which we receive at game end)
@@ -47,7 +50,8 @@ private:
     GameState state;
     PlayerID localPlayer;
 
-    std::vector<ActionEntry> actions;
+    // Sequential log of every game action taken
+    std::vector<ActionEntry> gameActionLog;
     // Commitments made by the remote player (i.e., the opponent)
     std::vector<std::unique_ptr<Commitment>> enemyCommitments;
 

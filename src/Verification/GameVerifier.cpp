@@ -1,10 +1,12 @@
 #include "GameVerifier.h"
 
 GameVerifier::GameVerifier(const std::map<CardID, uint8_t>& localDeckContents, PlayerID localPlayer)
-    : state(localDeckContents, localPlayer), localPlayer(localPlayer) {}
+    : state(localDeckContents, localPlayer), localPlayer(localPlayer) {
+    state.getOpponentPlayerData(localPlayer).hand = std::variant<ClearHand, UnknownHand>(ClearHand());
+}
 
-void GameVerifier::initialiseOpponentDeck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck) {
-    state.getOpponentPlayerData(localPlayer).deck.setEncryptedContents(encryptedDeck);
+void GameVerifier::initialiseOpponentDeck(const std::map<CardID, uint8_t> &plaintextDeckContents) {
+    state.getOpponentPlayerData(localPlayer).deck.v_setPlaintextContents(plaintextDeckContents);
 }
 
 void GameVerifier::setPlayerGoingFirst(PlayerID playerId) {
@@ -16,17 +18,18 @@ void GameVerifier::setPlayerGoingFirst(PlayerID playerId) {
  * Used by the verifier to simulate the entire game by playing these game actions in sequence.
  * @param action Game action occurring
  */
-void GameVerifier::addAction(ActionEntry action) {
-    actions.emplace_back(action);
+void GameVerifier::logAction(ActionEntry action) {
+    gameActionLog.emplace_back(action);
 }
 
 /**
- * Called any time the opponent makes a commitment mid-game. We don't log our own commitments because there is
- * no point in verifying our own commitments (we know them to be true).
+ * Called any time the opponent makes a commitment mid-game. <b>This automatically logs the "VerifyCommitment" game action</b>.
+ * We don't log our own commitments because there is no point in verifying our own commitments (we know them to be true).
  * @param commitment Pointer to heap-instantiated commitment object
  */
-void GameVerifier::addEnemyCommitment(std::unique_ptr<Commitment> commitment) {
+void GameVerifier::logEnemyCommitment(std::unique_ptr<Commitment> commitment) {
     enemyCommitments.push_back(std::move(commitment));
+    gameActionLog.push_back(Action::VerifyCommitment(enemyCommitments.size() - 1));
 }
 
 void GameVerifier::setLocalDeckCommitmentKey(const DeckHashKey& key) {
@@ -114,8 +117,108 @@ std::vector<ShuffleSeed> GameVerifier::getLocalShuffleSeedsForOpponentsDeck() co
     return opponentDeckSeeds.local;
 }
 
-bool GameVerifier::run() {
+/**
+ * A simulation-only helper method that shuffles the deck of the local player.
+ * @param shuffleSeedIndex Index of current shuffle seed. Equal to the number of shuffles done to this deck minus one
+ */
+void GameVerifier::v_shuffleLocalDeck(size_t shuffleSeedIndex) {
+    state.getPlayerData(localPlayer).deck.v_shuffleWithSeeds(
+        ourDeckSeeds.local[shuffleSeedIndex], ourDeckSeeds.remote[shuffleSeedIndex]
+    );
+}
 
+/**
+ * A simulation-only helper method that shuffles the opponent's deck.
+ * @param shuffleSeedIndex Index of current shuffle seed. Equal to the number of shuffles done to this deck minus one
+ */
+void GameVerifier::v_shuffleOpponentsDeck(size_t shuffleSeedIndex) {
+    state.getOpponentPlayerData(localPlayer).deck.v_shuffleWithSeeds(
+        opponentDeckSeeds.remote[shuffleSeedIndex], opponentDeckSeeds.local[shuffleSeedIndex]
+    );
+}
+
+// the code for this helper type was taken from https://en.cppreference.com/w/cpp/utility/variant/visit2.html
+template<class... Ts>
+struct overloaded : Ts... { using Ts::operator()...; };
+
+/**
+ * Resimulates the entire game using the logged sequence of every game action and commitment. Uses shuffle seeds
+ * distributed at the end of the game to deterministically shuffle decks.
+ * @return False if a discrepancy was detected
+ */
+bool GameVerifier::run() {
+    size_t currentTurn = 0;
+    size_t currentLocalDeckShuffleSeed = 0;
+    size_t currentOpponentDeckShuffleSeed = 0;
+
+    for (size_t i = 0; i < gameActionLog.size(); ++i) {
+        bool ok = std::visit(overloaded {
+
+            [&](const Action::DealDamage& a) -> bool {
+                auto& pd = state.getPlayerData(a.target);
+                pd.currentHealth -= a.amount;
+                return true;
+            },
+
+            [&](const Action::GainLife& a) -> bool {
+                auto& pd = state.getPlayerData(a.target);
+                pd.currentHealth += a.amount;
+                return true;
+            },
+
+            [&](const Action::DrawCards& a) -> bool {
+                auto& pd = state.getPlayerData(a.player);
+                for (uint8_t j = 0; j < a.count; ++j) {
+                    auto& hand = std::get<ClearHand>(pd.hand);
+                    if (hand.isFull()) return false; // return false means discrepancy detected. so don't log draw action on full hand
+                    auto card = pd.deck.draw();
+                    // if deck empty, apply fatigue damage. else, add card to hand
+                    if (!card.has_value()) pd.currentHealth -= ++pd.fatigueCount;
+                    else hand.addCard(card.value());
+                }
+                return true;
+            },
+
+            [&](const Action::PlayCard& a) -> bool {
+                auto& pd = state.getPlayerData(a.player);
+                if (!std::get<ClearHand>(pd.hand).removeCard(a.card)) return false;
+                pd.graveyard.push_back(a.card);
+                return true;
+            },
+
+            [&](const Action::Discard& a) -> bool {
+                // auto& pd = state.getPlayerData(a.player);
+                // auto it = std::ranges::find(pd.handContents, a.card);
+                // if (it == pd.handContents.end()) return false;
+                // pd.handContents.erase(it);
+                // pd.graveyard.push_back(a.card);
+                return true;
+            },
+
+            [&](const Action::EndTurn& a) -> bool {
+                state.activePlayer = PlayerIDUtils::getOpponent(a.player);
+                currentTurn++;
+                return true;
+            },
+
+            [&](const Action::Shuffle& a) -> bool {
+                if (a.deckOwner == localPlayer) v_shuffleLocalDeck(currentLocalDeckShuffleSeed++);
+                else v_shuffleOpponentsDeck(currentOpponentDeckShuffleSeed++);
+                return true;
+            },
+
+            [&](const Action::VerifyCommitment& a) -> bool {
+                if (a.commitmentIndex >= enemyCommitments.size()) return false;
+                return enemyCommitments[a.commitmentIndex]->verify(state);
+            },
+
+        }, gameActionLog[i]);
+
+        if (!ok) {
+            // TODO: print something like "verification failed at action i"
+            return false;
+        }
+    }
 
     return true;
 }

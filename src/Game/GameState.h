@@ -5,6 +5,8 @@
 #include "../Cards/CardID.h"
 #include "../Cards/Deck.h"
 #include "../PlayerID.h"
+#include "../Hand/ClearHand.h"
+#include "../Hand/UnknownHand.h"
 
 // TODO: Add source file to this class; it's outgrown this header
 /**
@@ -18,25 +20,28 @@ public:
     // Construct GameState with cleartext local deck and empty remote deck
     GameState(const std::map<CardID, uint8_t>& localPlaintextDeckContents, PlayerID localPlayer)
         : playerData {
-            localPlayer == PlayerID::ONE ? PlayerData(localPlaintextDeckContents) : PlayerData(),
-            localPlayer == PlayerID::TWO ? PlayerData(localPlaintextDeckContents) : PlayerData(),
+            localPlayer == PlayerID::ONE
+            ? PlayerData(localPlaintextDeckContents, true) : PlayerData(false),
+            localPlayer == PlayerID::TWO
+            ? PlayerData(localPlaintextDeckContents, true) : PlayerData(false),
         } {}
 
     // Individual player data. The GameState possesses a PlayerData for each of the two players
     struct PlayerData {
-        PlayerData() = default;
-        // UNUSED PlayerData constructor
-        //PlayerData(const std::vector<std::pair<Point, Scalar>>& encryptedDeck)
-        //    : deck(encryptedDeck) {}
-        PlayerData(const std::map<CardID, uint8_t>& plaintextDeckContents)
-            : deck(plaintextDeckContents) {}
+        PlayerData(bool isLocalPlayer) : hand(isLocalPlayer
+                ? std::variant<ClearHand, UnknownHand>(ClearHand{})
+                : std::variant<ClearHand, UnknownHand>(UnknownHand{})
+            ) {}
+
+        PlayerData(const std::map<CardID, uint8_t>& plaintextDeckContents, bool isLocalPlayer)
+            : deck(plaintextDeckContents), hand(isLocalPlayer
+                ? std::variant<ClearHand, UnknownHand>(ClearHand{})
+                : std::variant<ClearHand, UnknownHand>(UnknownHand{})
+            ) {}
 
         Deck deck;
-        // TODO: Could make a Hand class in the future for storing hand contents + visibility states
-        // TODO: Use pointers to card objects instead of card IDs?
-        // unknown card in opponent's hand = nullopt. bool = opponent knows (only applies to cards in local player's hand)
-        std::vector<std::optional<std::pair<CardID, bool>>> handContents = {};
-        uint16_t maxHealth = 20, currentHealth = maxHealth;
+        std::variant<ClearHand, UnknownHand> hand;
+        int16_t maxHealth = 20, currentHealth = maxHealth;
         uint8_t maxMana = 5, currentMana = maxMana;
         uint8_t fatigueCount = 0;
         std::vector<CardID> graveyard = {};
