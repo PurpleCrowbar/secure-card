@@ -106,6 +106,10 @@ void LookupTable::saveToFile() const {
     if (!file) throw std::runtime_error("Failed to write lookup table to disk.");
 }
 
+/**
+ * @param cardPoint Plaintext card point representation.
+ * @return Plaintext card ID if found, else nullopt
+ */
 std::optional<CardID> LookupTable::getCardID(const Point& cardPoint) const {
     auto it = lookupTable.find(cardPoint);
     return it != lookupTable.end() ? std::optional(it->second) : std::nullopt;
