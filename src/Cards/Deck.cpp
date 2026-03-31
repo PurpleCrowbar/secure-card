@@ -114,22 +114,25 @@ bool Deck::addCardSolelyEncryptedLocally(CardID id, const Scalar &localKey, uint
     return true;
 }
 
-// TODO: Must be updated to return std::expected<CardID, DeckQueryErrorEnum>, which requires update to C++23
+// TODO: Must be updated to return std::expected<CardID, DeckQueryError>, which requires update to C++23
 /**
  * Returns the card ID of the top card of the deck, then removes it from the deck.\n
- * Resulting value must be assigned to user's hand; this class is not responsible for that.
+ * Resulting value must be assigned to user's hand; this class is not responsible for that.\n
+ * <b>Always removes the top card of this deck if it exists, regardless of if we know its value.</b>
  * @return The card ID of the drawn card, else nullopt if it's unknown or the deck is empty
  */
 std::optional<CardID> Deck::draw() {
     if (contents.empty()) return std::nullopt;
 
     auto card = std::get_if<CardID>(&contents.front().card);
-    if (!card) return std::nullopt;
-    CardID cardId = *card;
+    CardID cardId;
+    if (card) {
+        cardId = *card;
+        plaintextContents.at(cardId)--;
+        if (plaintextContents.at(cardId) == 0) plaintextContents.erase(cardId);
+    }
     contents.erase(contents.begin());
-    plaintextContents.at(cardId)--;
-    if (plaintextContents.at(cardId) == 0) plaintextContents.erase(cardId);
-    return cardId;
+    return card ? std::optional(cardId) : std::nullopt;
 }
 
 // TODO: improve return type, function may return nullopt for reasons other than not knowing card ID (e.g., index out of bounds)
