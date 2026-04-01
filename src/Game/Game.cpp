@@ -13,8 +13,8 @@ void Game::run() {
     exchangeDeckCommitments();
 
     std::cout << "\n=== Shuffling decks ===\n";
-    state.playerData[0].deck.setEncryptedContents(performShuffle(PlayerID::ONE));
-    state.playerData[1].deck.setEncryptedContents(performShuffle(PlayerID::TWO));
+    performShuffle(PlayerID::ONE);
+    performShuffle(PlayerID::TWO);
 
     std::cout << "\n=== Drawing opening hands ===\n";
     drawCards(PlayerID::ONE, 4);
@@ -90,13 +90,13 @@ void Game::postGameExchangeAndVerify() {
     std::cout << "\n=== Post-game verification exchange ===\n";
 
     // Data we'll send
-    auto seedsForOurDeck = verifier.getLocalShuffleSeedsForOurDeck();
+    auto localSeedsForOurDeck = verifier.getLocalShuffleSeedsForOurDeck();
     const DeckHashKey& deckKey = verifier.getLocalDeckCommitmentKey();
-    auto seedsForOpponentDeck = verifier.getLocalShuffleSeedsForOpponentsDeck();
+    auto localSeedsForOpponentDeck = verifier.getLocalShuffleSeedsForOpponentsDeck();
     const auto& commitmentKeys = verifier.getLocalCommitmentKeys();
 
     // Containers for data we receive
-    std::vector<ShuffleSeed> remoteSeedsForTheirDeck;
+    std::vector<ShuffleSeed> remoteSeedsForOpponentDeck;
     DeckHashKey remoteDeckKey;
     std::map<CardID, uint8_t> remoteDeckContents;
     std::vector<ShuffleSeed> remoteSeedsForOurDeck;
@@ -104,9 +104,9 @@ void Game::postGameExchangeAndVerify() {
 
     if (localPlayer == PlayerID::ONE) {
         // Shuffle seeds for each player's own deck
-        network.sendShuffleSeeds(seedsForOurDeck);
+        network.sendShuffleSeeds(localSeedsForOurDeck);
         // Opponent's seeds for their deck
-        remoteSeedsForTheirDeck = network.receiveShuffleSeeds();
+        remoteSeedsForOpponentDeck = network.receiveShuffleSeeds();
 
         // Deck hash key and plaintext deck contents
         // Key for hashed deck we sent at the beginning of game as well as the plaintext contents
@@ -116,7 +116,7 @@ void Game::postGameExchangeAndVerify() {
         remoteDeckContents = network.receiveDeckContents();
 
         // Shuffle seeds for each player's opponent's deck
-        network.sendShuffleSeeds(seedsForOpponentDeck);
+        network.sendShuffleSeeds(localSeedsForOpponentDeck);
         remoteSeedsForOurDeck = network.receiveShuffleSeeds();
 
         // Commitment keys for each player
@@ -124,8 +124,8 @@ void Game::postGameExchangeAndVerify() {
         remoteCommitmentKeys = network.receiveCommitmentKeys();
     }
     else {
-        remoteSeedsForTheirDeck = network.receiveShuffleSeeds();
-        network.sendShuffleSeeds(seedsForOurDeck);
+        remoteSeedsForOpponentDeck = network.receiveShuffleSeeds();
+        network.sendShuffleSeeds(localSeedsForOurDeck);
 
         remoteDeckKey = network.receiveDeckHashKey();
         remoteDeckContents = network.receiveDeckContents();
@@ -133,7 +133,7 @@ void Game::postGameExchangeAndVerify() {
         network.sendDeckContents(localDeckContents);
 
         remoteSeedsForOurDeck = network.receiveShuffleSeeds();
-        network.sendShuffleSeeds(seedsForOpponentDeck);
+        network.sendShuffleSeeds(localSeedsForOpponentDeck);
 
         remoteCommitmentKeys = network.receiveCommitmentKeys();
         network.sendCommitmentKeys(commitmentKeys);
@@ -155,7 +155,7 @@ void Game::postGameExchangeAndVerify() {
     // supply all remote seeds to verifier
     verifier.addAllRemoteShuffleSeeds(localPlayer, remoteSeedsForOurDeck);
     PlayerID opponent = PlayerIDUtils::getOpponent(localPlayer);
-    verifier.addAllRemoteShuffleSeeds(opponent, remoteSeedsForTheirDeck);
+    verifier.addAllRemoteShuffleSeeds(opponent, remoteSeedsForOpponentDeck);
 
     // supply enemy commitment keys to verifier
     if (!verifier.decryptEnemyCommitments(remoteCommitmentKeys)) {
@@ -172,30 +172,14 @@ void Game::postGameExchangeAndVerify() {
     }
 }
 
-// For a deck owned by Alice, with opponent Bob:
-//
-//   1. Alice converts her deck to curve points, encrypts ALL cards with a
-//      single bulk key K, shuffles, and sends the encrypted deck to Bob.
-//      Each card is now: E(K, plaintext). Alice knows everything; Bob knows nothing.
-//
-//   2. Bob receives the deck, encrypts EACH card with a unique per-card key
-//      k_i, shuffles, and sends it back to Alice.
-//      Each card is now: E(k_i, E(K, plaintext)). Neither player knows the
-//      card-to-position mapping (Bob shuffled blind, Alice can't see past k_i).
-//
-//   3. Alice strips the bulk key K from each card (decrypts with K_inv), then
-//      encrypts each card with a unique per-card key k_j. Alice sends the
-//      final ciphertexts to Bob so both sides track the same deck.
-//      Each card is now: E(k_j, E(k_i, plaintext)). Neither player can
-//      read any card alone - drawing/peeking a card p requires both
-//      k_j_inv (from Alice) and k_i_inv (from Bob).
-//
-// IMPORTANT: Alice does NOT shuffle in step 3. The order was fixed by Bob in
-// step 2. Alice only re-encrypts in place, preserving positions. This means
-// Bob's key k_i for position p is still valid after step 3.
-
-std::vector<std::pair<Point, Scalar>> Game::performShuffle(PlayerID deckOwner) {
+/**
+ * Networked method, callable in card effects. Conducts full mental poker shuffle protocol using commutative encryption.
+ * Also logs the seed used to shuffle the deck so the shuffle may be recreated deterministically during verification.
+ * @param deckOwner Owner of deck being shuffled
+ */
+void Game::performShuffle(PlayerID deckOwner) {
     const bool localPlayerIsShuffling = (deckOwner == localPlayer);
+    std::vector<std::pair<Point, Scalar>> result;
 
     // if the local player owns the deck being shuffled
     if (localPlayerIsShuffling) {
@@ -215,9 +199,8 @@ std::vector<std::pair<Point, Scalar>> Game::performShuffle(PlayerID deckOwner) {
         auto received = network.receivePoints();
         std::cout << "  [Shuffle] Received re-encrypted deck back (" << received.size() << " cards)\n";
 
-        // strip initial bulk encryption layer off of the cards and apply our own unique keys to every
-        // card in the deck.
-        auto reEncrypted = std::vector<std::pair<Point, PHKeyPair>>();
+        // strip initial bulk encryption layer off of the cards and apply our own unique keys to every card in the deck
+        std::vector<std::pair<Point, PHKeyPair>> reEncrypted;
         reEncrypted.reserve(received.size());
         for (const auto& ct : received) {
             // strip the bulk encryption layer
@@ -230,23 +213,19 @@ std::vector<std::pair<Point, Scalar>> Game::performShuffle(PlayerID deckOwner) {
 
         // Send the final ciphertexts to the opponent so both players
         // have synced copies of each other's encrypted decks
-        std::vector<Point> finalCiphertexts;
-        finalCiphertexts.reserve(reEncrypted.size());
+        std::vector<Point> finalDeck;
+        finalDeck.reserve(reEncrypted.size());
         for (const auto& [ct, key] : reEncrypted) {
-            finalCiphertexts.push_back(ct);
+            finalDeck.push_back(ct);
         }
         std::cout << "  [Shuffle] Sending final re-encrypted deck to opponent...\n";
-        network.sendPoints(finalCiphertexts);
+        network.sendPoints(finalDeck);
 
-        // build out the deck data and return it
-        std::vector<std::pair<Point, Scalar>> result;
+        // build out the deck data
         result.reserve(reEncrypted.size());
         for (const auto& [ct, key] : reEncrypted) {
             result.emplace_back(ct, key.k_inv);
         }
-
-        verifier.logAction(Action::Shuffle(deckOwner));
-        return result;
     // if it's the opponent's deck being shuffled
     } else {
         // receive the owner's bulk-encrypted, shuffled deck
@@ -270,19 +249,19 @@ std::vector<std::pair<Point, Scalar>> Game::performShuffle(PlayerID deckOwner) {
 
         // receive final ciphertexts from the owner. the deck is now shuffled and neither player knows
         // the order of the cards in the deck
-        auto finalDeck = network.receivePoints();
+        std::vector<Point> finalDeck = network.receivePoints();
         std::cout << "  [Shuffle] Received final deck from owner (" << finalDeck.size() << " cards)\n";
 
         // build our deck data with the final ciphertexts and our local unique keys
-        std::vector<std::pair<Point, Scalar>> result;
         result.reserve(finalDeck.size());
         for (std::size_t i = 0; i < finalDeck.size(); i++) {
             result.emplace_back(finalDeck[i], withKeys[i].second.k_inv);
         }
-
-        verifier.logAction(Action::Shuffle(deckOwner));
-        return result;
     }
+
+    // Update deck data with new ordered, encrypted deck contents and log action to verifier
+    state.getPlayerData(deckOwner).deck.setEncryptedContents(result);
+    verifier.logAction(Action::Shuffle(deckOwner));
 }
 
 /**

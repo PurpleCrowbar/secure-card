@@ -1,4 +1,5 @@
 #include "GameVerifier.h"
+#include <iostream>
 
 GameVerifier::GameVerifier(const std::map<CardID, uint8_t>& localDeckContents, PlayerID localPlayer)
     : state(localDeckContents, localPlayer), localPlayer(localPlayer) {
@@ -215,7 +216,7 @@ bool GameVerifier::run() {
         }, gameActionLog[i]);
 
         if (!ok) {
-            // TODO: print something like "verification failed at action i"
+            std::cerr << "Verification failed at action " << std::to_string(i) << ".\n";
             return false;
         }
     }

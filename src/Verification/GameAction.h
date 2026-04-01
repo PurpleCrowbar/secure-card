@@ -11,7 +11,7 @@ namespace Action {
     struct PlayCard         { PlayerID player; CardID card; };
     struct Discard          { PlayerID player; CardID card; };
     struct EndTurn          { PlayerID player; };
-    struct Shuffle          { PlayerID deckOwner; }; // note: does this need shuffle seed? probably not, right?
+    struct Shuffle          { PlayerID deckOwner; };
     struct VerifyCommitment { size_t commitmentIndex; }; // TODO: omit index? commitments evaluated sequentially anyway
 }
 

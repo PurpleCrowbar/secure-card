@@ -1,13 +1,10 @@
 #pragma once
 
 #include <memory>
-#include <vector>
 #include "GameState.h"
 #include "../Network.h"
 #include "../PlayerID.h"
 #include "../Verification/GameVerifier.h"
-
-class Card;
 
 class Game {
 public:
@@ -22,9 +19,8 @@ public:
     // Exchanges keys and draws cards. Both players call with the same arguments.
     // The drawing player receives keys; the other player sends keys.
     void drawCards(PlayerID player, uint8_t count);
-    // Runs the mental poker shuffle protocol for one player's deck, both
-    // players call this with the same deckOwner argument
-    std::vector<std::pair<Point, Scalar>> performShuffle(PlayerID deckOwner);
+    // Networked, shuffles a deck, both players call this with the same deckOwner argument
+    void performShuffle(PlayerID deckOwner);
 
     // Getters
     [[nodiscard]] PlayerID getLocalPlayer() const { return localPlayer; }
