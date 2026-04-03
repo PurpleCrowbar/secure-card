@@ -14,10 +14,6 @@
  */
 class GameState {
 public:
-    // UNUSED. Construct GameState with both players' encrypted decks
-    //GameState(const std::vector<std::pair<Point, Scalar>>& p1Deck, const std::vector<std::pair<Point, Scalar>>& p2Deck)
-    //    : playerData { PlayerData(p1Deck), PlayerData(p2Deck) } {}
-    // Construct GameState with cleartext local deck and empty remote deck
     GameState(const std::map<CardID, uint8_t>& localPlaintextDeckContents, PlayerID localPlayer)
         : playerData {
             localPlayer == PlayerID::ONE
@@ -41,7 +37,7 @@ public:
 
         Deck deck;
         std::variant<ClearHand, UnknownHand> hand;
-        int16_t maxHealth = 20, currentHealth = maxHealth;
+        int16_t maxHealth = 10, currentHealth = maxHealth;
         uint8_t maxMana = 5, currentMana = maxMana;
         uint8_t fatigueCount = 0;
         std::vector<CardID> graveyard = {};
@@ -50,7 +46,7 @@ public:
     /**
      * @return Whether the game is over and, if it is, who the winner was. Nullopt if it was a tie
      */
-    std::pair<bool, std::optional<PlayerID>> isGameOver() const {
+    [[nodiscard]] std::pair<bool, std::optional<PlayerID>> isGameOver() const {
         bool gameOver = false;
         std::optional<PlayerID> winner;
         for (int i = 0; i < playerData.size(); ++i) {
@@ -63,20 +59,33 @@ public:
         return {gameOver, winner};
     }
 
-    PlayerData& getPlayerData(PlayerID player) {
+    [[nodiscard]] PlayerData& getPlayerData(PlayerID player) {
         return playerData[static_cast<std::underlying_type_t<PlayerID>>(player)];
     }
 
-    const PlayerData& getImmutablePlayerData(PlayerID player) const {
+    [[nodiscard]] const PlayerData& getImmutablePlayerData(PlayerID player) const {
         return playerData[static_cast<std::underlying_type_t<PlayerID>>(player)];
     }
 
-    PlayerData& getOpponentPlayerData(PlayerID localPlayer) {
+    [[nodiscard]] PlayerData& getOpponentPlayerData(PlayerID localPlayer) {
         return playerData[static_cast<std::underlying_type_t<PlayerID>>(PlayerIDUtils::getOpponent(localPlayer))];
     }
 
-    bool isMyTurn(PlayerID localPlayer) const {
+    [[nodiscard]] bool isMyTurn(PlayerID localPlayer) const {
         return activePlayer.value() == localPlayer;
+    }
+
+    [[nodiscard]] size_t getHandSize(PlayerID player) const {
+        auto data = playerData[static_cast<std::underlying_type_t<PlayerID>>(player)];
+        if (const auto hand = std::get_if<ClearHand>(&data.hand)) return hand->getSize();
+        if (const auto hand = std::get_if<UnknownHand>(&data.hand)) return hand->getSize();
+
+        // This never returns; data.hand is always either a ClearHand or an UnknownHand.
+        return 0;
+    }
+
+    [[nodiscard]] size_t getOpponentHandSize(PlayerID player) const {
+        return getHandSize(PlayerIDUtils::getOpponent(player));
     }
 
     // index 0 = Player One, index 1 = Player Two
