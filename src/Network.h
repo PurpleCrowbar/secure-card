@@ -30,36 +30,48 @@ public:
     void receiveAll(void* buffer, std::size_t len);
 
     void sendUint8(uint8_t val);
-    uint8_t receiveUint8();
+    [[nodiscard]] uint8_t receiveUint8();
     void sendUint16(uint16_t val);
-    uint16_t receiveUint16();
+    [[nodiscard]] uint16_t receiveUint16();
     void sendUint32(uint32_t val);
-    uint32_t receiveUint32();
+    [[nodiscard]] uint32_t receiveUint32();
 
     void sendPoint(const Point& p);
-    Point receivePoint();
+    [[nodiscard]] Point receivePoint();
     void sendScalar(const Scalar& s);
-    Scalar receiveScalar();
-    void sendPoints(const std::vector<Point>& points);
-    std::vector<Point> receivePoints();
+    [[nodiscard]] Scalar receiveScalar();
+    /**
+     * Sends number of bytes followed by data for each point.
+     * Programmer's note: Templates must be defined in headers. This method receives a sized range of Points.
+     * @param points Points to send
+     */
+    template<std::ranges::sized_range R>
+    requires std::same_as<std::ranges::range_value_t<R>, Point>
+    void sendPoints(R&& points) {
+        sendUint8(static_cast<uint8_t>(std::ranges::size(points)));
+        for (const auto& point : points) {
+            sendPoint(point);
+        }
+    }
+    [[nodiscard]] std::vector<Point> receivePoints();
     void sendScalars(const std::vector<Scalar>& scalars);
     std::vector<Scalar> receiveScalars();
 
     // Post-game verification helpers
     void sendDeckHash(const DeckHash& hash);
-    DeckHash receiveDeckHash();
+    [[nodiscard]] DeckHash receiveDeckHash();
     void sendDeckHashKey(const DeckHashKey& key);
-    DeckHashKey receiveDeckHashKey();
+    [[nodiscard]] DeckHashKey receiveDeckHashKey();
     void sendShuffleSeeds(const std::vector<ShuffleSeed>& seeds);
-    std::vector<ShuffleSeed> receiveShuffleSeeds();
+    [[nodiscard]] std::vector<ShuffleSeed> receiveShuffleSeeds();
     void sendDeckContents(const std::map<CardID, uint8_t>& contents);
-    std::map<CardID, uint8_t> receiveDeckContents();
+    [[nodiscard]] std::map<CardID, uint8_t> receiveDeckContents();
     void sendCommitmentKeys(const std::vector<std::vector<Scalar>>& commitmentKeys);
-    std::vector<std::vector<Scalar>> receiveCommitmentKeys();
+    [[nodiscard]] std::vector<std::vector<Scalar>> receiveCommitmentKeys();
 
     // most commonly used in the Game loop
     void sendPacketType(PacketType type);
-    PacketType receivePacketType();
+    [[nodiscard]] PacketType receivePacketType();
 
 private:
     sf::TcpListener listener;

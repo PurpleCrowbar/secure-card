@@ -71,7 +71,7 @@ void Network::sendUint8(uint8_t val) {
     sendAll(&val, 1);
 }
 
-uint8_t Network::receiveUint8() {
+[[nodiscard]] uint8_t Network::receiveUint8() {
     uint8_t val;
     receiveAll(&val, 1);
     return val;
@@ -86,7 +86,7 @@ void Network::sendUint16(uint16_t val) {
     sendAll(bytes, 2);
 }
 
-uint16_t Network::receiveUint16() {
+[[nodiscard]] uint16_t Network::receiveUint16() {
     uint8_t bytes[2];
     receiveAll(bytes, 2);
     return static_cast<uint16_t>((bytes[0] << 8) | bytes[1]);
@@ -102,7 +102,7 @@ void Network::sendUint32(uint32_t val) {
     sendAll(bytes, 4);
 }
 
-uint32_t Network::receiveUint32() {
+[[nodiscard]] uint32_t Network::receiveUint32() {
     uint8_t bytes[4];
     receiveAll(bytes, 4);
     // read each of the four bytes into a single uint32_t
@@ -117,7 +117,7 @@ void Network::sendPoint(const Point& p) {
     sendAll(p.data(), POINT_BYTES);
 }
 
-Point Network::receivePoint() {
+[[nodiscard]] Point Network::receivePoint() {
     Point p;
     receiveAll(p.data(), POINT_BYTES);
     return p;
@@ -127,28 +127,17 @@ void Network::sendScalar(const Scalar& s) {
     sendAll(s.data(), SCALAR_BYTES);
 }
 
-Scalar Network::receiveScalar() {
+[[nodiscard]] Scalar Network::receiveScalar() {
     Scalar s;
     receiveAll(s.data(), SCALAR_BYTES);
     return s;
 }
 
 /**
- * Sends number of bytes followed by data for each point
- * @param points Points to send
- */
-void Network::sendPoints(const std::vector<Point>& points) {
-    sendUint8(static_cast<uint8_t>(points.size()));
-    for (const auto& p : points) {
-        sendPoint(p);
-    }
-}
-
-/**
  * Receives any number of points - first byte of received data expected to be object count
  * @return Vector of points read in
  */
-std::vector<Point> Network::receivePoints() {
+[[nodiscard]] std::vector<Point> Network::receivePoints() {
     uint8_t count = receiveUint8();
     std::vector<Point> result;
     result.reserve(count);
@@ -170,7 +159,7 @@ void Network::sendScalars(const std::vector<Scalar>& scalars) {
     }
 }
 
-std::vector<Scalar> Network::receiveScalars() {
+[[nodiscard]] std::vector<Scalar> Network::receiveScalars() {
     uint8_t count = receiveUint8();
     std::vector<Scalar> result;
     result.reserve(count);
@@ -184,7 +173,7 @@ void Network::sendDeckHash(const DeckHash& hash) {
     sendAll(hash.data(), DECK_HASH_BYTES);
 }
 
-DeckHash Network::receiveDeckHash() {
+[[nodiscard]] DeckHash Network::receiveDeckHash() {
     DeckHash hash;
     receiveAll(hash.data(), DECK_HASH_BYTES);
     return hash;
@@ -194,7 +183,7 @@ void Network::sendDeckHashKey(const DeckHashKey& key) {
     sendAll(key.data(), DECK_HASH_KEY_BYTES);
 }
 
-DeckHashKey Network::receiveDeckHashKey() {
+[[nodiscard]] DeckHashKey Network::receiveDeckHashKey() {
     DeckHashKey key;
     receiveAll(key.data(), DECK_HASH_KEY_BYTES);
     return key;
@@ -212,7 +201,7 @@ void Network::sendShuffleSeeds(const std::vector<ShuffleSeed>& seeds) {
     }
 }
 
-std::vector<ShuffleSeed> Network::receiveShuffleSeeds() {
+[[nodiscard]] std::vector<ShuffleSeed> Network::receiveShuffleSeeds() {
     uint8_t count = receiveUint8();
     std::vector<ShuffleSeed> result;
     result.reserve(count);
@@ -235,7 +224,7 @@ void Network::sendDeckContents(const std::map<CardID, uint8_t>& contents) {
     }
 }
 
-std::map<CardID, uint8_t> Network::receiveDeckContents() {
+[[nodiscard]] std::map<CardID, uint8_t> Network::receiveDeckContents() {
     uint8_t count = receiveUint8();
     std::map<CardID, uint8_t> contents;
     for (uint8_t i = 0; i < count; i++) {
@@ -259,7 +248,7 @@ void Network::sendCommitmentKeys(const std::vector<std::vector<Scalar>>& commitm
     }
 }
 
-std::vector<std::vector<Scalar>> Network::receiveCommitmentKeys() {
+[[nodiscard]] std::vector<std::vector<Scalar>> Network::receiveCommitmentKeys() {
     uint8_t outerCount = receiveUint8();
     std::vector<std::vector<Scalar>> result;
     result.reserve(outerCount);
@@ -273,6 +262,6 @@ void Network::sendPacketType(PacketType type) {
     sendUint8(static_cast<uint8_t>(type));
 }
 
-PacketType Network::receivePacketType() {
+[[nodiscard]] PacketType Network::receivePacketType() {
     return static_cast<PacketType>(receiveUint8());
 }
