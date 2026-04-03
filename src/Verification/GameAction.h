@@ -12,7 +12,7 @@ namespace Action {
     struct Discard          { PlayerID player; CardID card; };
     struct EndTurn          { PlayerID player; };
     struct Shuffle          { PlayerID deckOwner; };
-    struct VerifyCommitment { size_t commitmentIndex; }; // TODO: omit index? commitments evaluated sequentially anyway
+    struct VerifyCommitment { };
 }
 
 using ActionEntry = std::variant<

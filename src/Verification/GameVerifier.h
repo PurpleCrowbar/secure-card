@@ -18,6 +18,17 @@ public:
 
     void logAction(ActionEntry action);
     void logEnemyCommitment(std::unique_ptr<Commitment> commitment);
+    /**
+     * Logs the local commitment keys for this commitment. <b>Must use inverse keys as this is for decryption.</b>
+     * Not to be confused with setLocalDeckCommitmentKey, which is used to verify the contents of players' decks haven't
+     * been illegally modified during the game. Programmer's note: Templates must be defined in headers.
+     * @param keys Keys for this commitment
+     */
+    template<std::ranges::input_range R>
+    requires std::same_as<std::ranges::range_value_t<R>, Scalar>
+    void logLocalCommitmentKeys(R&& keys) {
+        localCommitmentKeys.emplace_back(std::ranges::begin(keys), std::ranges::end(keys));
+    }
 
     // Deck commitment (keyed hash of deck contents)
     void setLocalDeckCommitmentKey(const DeckHashKey& key);

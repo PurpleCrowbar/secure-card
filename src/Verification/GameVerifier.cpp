@@ -16,7 +16,9 @@ void GameVerifier::setPlayerGoingFirst(PlayerID playerId) {
 
 /**
  * Called any time a primitive game action occurs during the game (e.g., card drawn, damage taken, etc).
- * Used by the verifier to simulate the entire game by playing these game actions in sequence.
+ * Used by the verifier to simulate the entire game by playing these game actions in sequence.<br><br>
+ * <b>Do not use this method to log VerifyCommitment actions in card effects;
+ * this is done automatically by GameVerifier::logEnemyCommitment.</b>
  * @param action Game action occurring
  */
 void GameVerifier::logAction(ActionEntry action) {
@@ -30,7 +32,7 @@ void GameVerifier::logAction(ActionEntry action) {
  */
 void GameVerifier::logEnemyCommitment(std::unique_ptr<Commitment> commitment) {
     enemyCommitments.push_back(std::move(commitment));
-    gameActionLog.push_back(Action::VerifyCommitment(enemyCommitments.size() - 1));
+    gameActionLog.emplace_back(Action::VerifyCommitment());
 }
 
 void GameVerifier::setLocalDeckCommitmentKey(const DeckHashKey& key) {
@@ -86,9 +88,10 @@ bool GameVerifier::decryptEnemyCommitments(const std::vector<std::vector<Scalar>
     if (enemyCommitments.size() != keys.size()) return false; // insufficient keys
 
     for (int i = 0; i < enemyCommitments.size(); i++) {
-        if (keys[i].size() == enemyCommitments[i]->getRemainingRequiredKeysCount())
-            enemyCommitments[i]->populateRemainingKeys(keys[i]);
-        else return false;
+        // If number of received keys for this commitment isn't equal to the required key count, return false
+        if (keys[i].size() != enemyCommitments[i]->getRemainingRequiredKeysCount()) return false;
+        // If any card failed to decrypt (due to receiving a dud key), return false
+        if (!enemyCommitments[i]->populateRemainingKeys(keys[i])) return false;
     }
     return true;
 }
@@ -151,6 +154,7 @@ bool GameVerifier::run() {
     size_t currentTurn = 0;
     size_t currentLocalDeckShuffleSeed = 0;
     size_t currentOpponentDeckShuffleSeed = 0;
+    size_t currentCommitment = 0;
 
     for (size_t i = 0; i < gameActionLog.size(); ++i) {
         bool ok = std::visit(overloaded {
@@ -188,11 +192,10 @@ bool GameVerifier::run() {
             },
 
             [&](const Action::Discard& a) -> bool {
-                // auto& pd = state.getPlayerData(a.player);
-                // auto it = std::ranges::find(pd.handContents, a.card);
-                // if (it == pd.handContents.end()) return false;
-                // pd.handContents.erase(it);
-                // pd.graveyard.push_back(a.card);
+                auto& pd = state.getPlayerData(a.player);
+                // Returns false if card not present in hand
+                if (!std::get<ClearHand>(pd.hand).removeCard(a.card)) return false;
+                pd.graveyard.push_back(a.card);
                 return true;
             },
 
@@ -209,8 +212,8 @@ bool GameVerifier::run() {
             },
 
             [&](const Action::VerifyCommitment& a) -> bool {
-                if (a.commitmentIndex >= enemyCommitments.size()) return false;
-                return enemyCommitments[a.commitmentIndex]->verify(state);
+                if (currentCommitment >= enemyCommitments.size()) return false;
+                return enemyCommitments[currentCommitment++]->verify(state);
             },
 
         }, gameActionLog[i]);
