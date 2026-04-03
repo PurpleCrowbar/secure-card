@@ -278,8 +278,8 @@ bool Deck::v_shuffleWithSeeds(ShuffleSeed ownerSeed, ShuffleSeed enemySeed) {
             cards.push_back(id);
         }
     }
-    shuffleDeck(cards, ownerSeed);
-    shuffleDeck(cards, enemySeed);
+    shuffleCards(cards, ownerSeed);
+    shuffleCards(cards, enemySeed);
 
     contents.clear();
     contents.reserve(cards.size());

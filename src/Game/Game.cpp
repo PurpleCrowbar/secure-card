@@ -5,8 +5,8 @@
 #include "../DeckCommitment.h"
 
 Game::Game(Network& network, PlayerID localPlayer, const std::map<CardID, uint8_t>& localDeckContents)
-    : state(localDeckContents, localPlayer), network(network),
-    localPlayer(localPlayer), verifier(localDeckContents, localPlayer),
+    : network(network), verifier(localDeckContents, localPlayer),
+    state(localDeckContents, localPlayer), localPlayer(localPlayer),
     localDeckContents(localDeckContents) {}
 
 void Game::run() {
@@ -186,10 +186,10 @@ void Game::performShuffle(PlayerID deckOwner) {
         auto deckPoints = convertCardsToPoints(state.getImmutablePlayerData(deckOwner).deck.getContents());
         // initial bulk encryption with single key
         auto bulkKey = generateKeyPair();
-        encryptDeckWithKey(deckPoints, bulkKey.k);
+        encryptCardsWithKey(deckPoints, bulkKey.k);
         // shuffle the deck before sending to opponent
         ShuffleSeed seed = randombytes_uniform(UINT32_MAX);
-        shuffleDeck(deckPoints, seed);
+        shuffleCards(deckPoints, seed);
         verifier.logLocalShuffleSeed(deckOwner, seed);
 
         // send 1-layer encryption deck to opponent
@@ -233,10 +233,10 @@ void Game::performShuffle(PlayerID deckOwner) {
         std::cout << "  [Shuffle] Received opponent's encrypted deck (" << received.size() << " cards)\n";
         // shuffle the deck
         ShuffleSeed seed = randombytes_uniform(UINT32_MAX);
-        shuffleDeck(received, seed);
+        shuffleCards(received, seed);
         verifier.logLocalShuffleSeed(deckOwner, seed);
         // encrypt each card with a unique per-card key,
-        auto withKeys = encryptDeckWithIndividualKeys(received);
+        auto withKeys = encryptCardsWithIndividualKeys(received);
 
         // now that we've uniquely encrypted each card and shuffled the deck, send it back to its owner
         std::vector<Point> ciphertextsToSend;
@@ -262,6 +262,24 @@ void Game::performShuffle(PlayerID deckOwner) {
     // Update deck data with new ordered, encrypted deck contents and log action to verifier
     state.getPlayerData(deckOwner).deck.setEncryptedContents(result);
     verifier.logAction(Action::Shuffle(deckOwner));
+}
+
+void Game::discard(PlayerID player, CardID card) {
+    auto playerData = state.getPlayerData(player);
+    if (auto clearHand = std::get_if<ClearHand>(&playerData.hand)) {
+        if (!clearHand->removeCard(card)) {
+            throw std::runtime_error(std::format(
+                "[Game::discard] Error: Card '{}' not found in local player's hand", CardFactory::create(card)->getName()
+            ));
+        }
+    }
+    else {
+        auto& unknownHand = std::get<UnknownHand>(playerData.hand);
+        // This returns false if hand is empty. Could throw exception if desired, but I think it's OK
+        unknownHand.removeCard();
+    }
+    playerData.graveyard.push_back(card);
+    verifier.logAction(Action::Discard(player, card));
 }
 
 /**
@@ -592,6 +610,10 @@ void Game::gainLife(PlayerID target, int amount) {
 
 int Game::getMana(PlayerID player) const {
     return state.getImmutablePlayerData(player).currentMana;
+}
+
+std::map<CardID, uint8_t> Game::getLocalPlayerHandContents() const {
+    return std::get<ClearHand>(state.getImmutablePlayerData(localPlayer).hand).getUnorderedHandContents();
 }
 
 /**

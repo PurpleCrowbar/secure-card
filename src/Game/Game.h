@@ -21,10 +21,16 @@ public:
     void drawCards(PlayerID player, uint8_t count);
     // Networked, shuffles a deck, both players call this with the same deckOwner argument
     void performShuffle(PlayerID deckOwner);
+    void discard(PlayerID player, CardID card);
 
     // Getters
     [[nodiscard]] PlayerID getLocalPlayer() const { return localPlayer; }
     [[nodiscard]] int getMana(PlayerID player) const;
+    [[nodiscard]] std::map<CardID, uint8_t> getLocalPlayerHandContents() const;
+
+    Network& network;
+    GameVerifier verifier;
+    GameState state;
 
 private:
     // Pre-game: both players commit to their deck contents via keyed hash
@@ -44,10 +50,7 @@ private:
     // post-game: exchange all secret data and run the verifier
     void postGameExchangeAndVerify();
 
-    GameState state;
-    Network& network;
     PlayerID localPlayer;
-    GameVerifier verifier;
     // Local player's deck's contents from the start of the game. Sent post-game for verification
     const std::map<CardID, uint8_t> localDeckContents;
 };

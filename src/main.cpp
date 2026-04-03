@@ -25,8 +25,9 @@ int main(const int argc, char** argv) {
 
     // TODO: Implement DeckSelector which allows player to get deck from some menu
     std::map<CardID, uint8_t> selectedDeck;
-    selectedDeck[CardID::LIGHTNING_BOLT] = 10;
+    selectedDeck[CardID::LIGHTNING_BOLT] = 5;
     selectedDeck[CardID::DISORGANIZE] = 5;
+    selectedDeck[CardID::SPECTRAL_WAIL] = 5;
 
     Game game(network, isHost ? PlayerID::ONE : PlayerID::TWO, selectedDeck);
     game.run();

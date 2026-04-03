@@ -7,6 +7,8 @@
 #include <iomanip>
 #include <random>
 #include <stdexcept>
+#include <optional>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include "Constants.h"
@@ -88,7 +90,7 @@ inline Point encrypt(CardID id, const Scalar& key) {
 /**
  * Decrypts a card ciphertext with a given key.
  * @param ciphertext Card ciphertext
- * @param key Key used to encrypt this card. May have been used by either player
+ * @param key Inverse of a key used to encrypt this card. May have been used by either player
  * @return Plaintext card-point representation. Lookup table required to get card ID
  */
 inline Point decrypt(const Point& ciphertext, const Scalar& key) {
@@ -113,33 +115,55 @@ inline Point decrypt(const Point& ciphertext, const Scalar& localKey, const Scal
 // --------------- Mental Poker ---------------
 
 /**
- * Converts the plaintext contents of a deck into their card-point forms with random, unique nonces applied
+ * Converts the plaintext contents of a deck into their card-point forms with random, unique nonces applied.
  * @param cards Map of card IDs to convert. Key = card ID, val = quantity to process
  * @return Ordered vector of card-point representations
  */
-inline std::vector<Point> convertCardsToPoints(const std::map<CardID, uint8_t>& cards) {
-    std::vector<Point> deck;
+[[nodiscard]] inline std::vector<Point> convertCardsToPoints(const std::map<CardID, uint8_t>& cards) {
+    std::vector<Point> points;
     for (const auto& [cardId, quantity] : cards) {
         std::unordered_set<Nonce> usedNonces;
         for (int i = 0; i < quantity; i++) {
             Nonce nonce = static_cast<Nonce>(randombytes_uniform(Constants::MAX_DECK_SIZE));
             while (usedNonces.contains(nonce)) nonce = (nonce + 1) % Constants::MAX_DECK_SIZE;
             usedNonces.insert(nonce);
-            deck.push_back(encodeToPoint(cardId, nonce));
+            points.push_back(encodeToPoint(cardId, nonce));
         }
     }
-    return deck;
+    return points;
 }
 
 /**
- * <b>This is not a networked function and should never be used in card resolutions.</b> This <i>only</i> shuffles a
+ * Converts a vector of card IDs into a vector of points. Applies unique nonces to duplicate copies of cards.
+ * @param cards Vector of card IDs to turn into points
+ * @return Vector of points analogous to original vector
+ */
+[[nodiscard]] inline std::vector<Point> convertCardsToPoints_vec(std::vector<CardID> cards) {
+    std::vector<Point> points;
+    points.reserve(cards.size());
+
+    std::unordered_map<CardID, std::unordered_set<Nonce>> usedNonces;
+
+    for (const CardID cardId : cards) {
+        auto& noncesForCard = usedNonces[cardId];
+        Nonce nonce = static_cast<Nonce>(randombytes_uniform(Constants::MAX_DECK_SIZE));
+        while (noncesForCard.contains(nonce)) nonce = (nonce + 1) % Constants::MAX_DECK_SIZE;
+        noncesForCard.insert(nonce);
+        points.push_back(encodeToPoint(cardId, nonce));
+    }
+
+    return points;
+}
+
+/**
+ * <b>This is not a networked function.</b> This <i>only</i> shuffles a
  * local vector. Randomises the order of items in a vector using a given seed.
  * @param deck Reference to vector of card-points to be shuffled
  * @param seed Shuffle seed to use
  */
 template <typename T>
-void shuffleDeck(std::vector<T>& deck, ShuffleSeed seed) {
-    std::mt19937 gen(seed);
+void shuffleCards(std::vector<T>& deck, const std::optional<ShuffleSeed> seed = std::nullopt) {
+    std::mt19937 gen(seed.value_or(std::random_device{}()));
     std::ranges::shuffle(deck, gen);
 }
 
@@ -148,7 +172,7 @@ void shuffleDeck(std::vector<T>& deck, ShuffleSeed seed) {
  * @param deck Reference to list of card-points to be encrypted
  * @param key Key to encrypt the cards with
  */
-inline void encryptDeckWithKey(std::vector<Point>& deck, const Scalar& key) {
+inline void encryptCardsWithKey(std::vector<Point>& deck, const Scalar& key) {
     for (auto& card : deck) card = encrypt(card, key);
 }
 
@@ -157,7 +181,7 @@ inline void encryptDeckWithKey(std::vector<Point>& deck, const Scalar& key) {
  * @param deck Reference to list of card-points to be decrypted
  * @param keyInverse Key to decrypt the cards with
  */
-inline void decryptDeckWithKey(std::vector<Point>& deck, const Scalar& keyInverse) {
+inline void decryptCardsWithKey(std::vector<Point>& deck, const Scalar& keyInverse) {
     for (auto& card : deck) card = decrypt(card, keyInverse);
 }
 
@@ -166,7 +190,7 @@ inline void decryptDeckWithKey(std::vector<Point>& deck, const Scalar& keyInvers
  * @param deck Vector of points to be encrypted with unique keys
  * @return Vector of encrypted card-points and their corresponding keys
  */
-inline std::vector<std::pair<Point, PHKeyPair>> encryptDeckWithIndividualKeys(const std::vector<Point> &deck) {
+[[nodiscard]] inline std::vector<std::pair<Point, PHKeyPair>> encryptCardsWithIndividualKeys(const std::vector<Point>& deck) {
     std::vector<std::pair<Point, PHKeyPair>> newDeck;
     newDeck.reserve(deck.size());
 
