@@ -68,7 +68,7 @@ void SpectralWail::resolve(Game& game, PlayerID controller) {
         game.state.getPlayerData(game.getLocalPlayer()).graveyard.push_back(handContents[indexToDiscard]);
 
         std::cout << std::format("  [Spectral Wail] You discarded {} at random!\n", CardFactory::create(handContents[indexToDiscard])->getName());
-        game.verifier.logAction(Action::Discard(game.getLocalPlayer()));
+        game.verifier.logAction(Action::Discard(game.getLocalPlayer(), handContents[indexToDiscard]));
         return;
     }
 }
