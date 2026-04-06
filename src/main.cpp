@@ -1,10 +1,13 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <thread>
 #include <SFML/Network.hpp>
 #include <sodium.h>
 #include "Cryptosystem.h"
 #include "Game/Game.h"
+#include "GUI/GameBridge.h"
+#include "GUI/GameRenderer.h"
 
 int main(const int argc, char** argv) {
     if (sodium_init() < 0) {
@@ -29,9 +32,20 @@ int main(const int argc, char** argv) {
     selectedDeck[CardID::DISORGANIZE] = 5;
     selectedDeck[CardID::SPECTRAL_WAIL] = 5;
 
+    GameBridge bridge;
     Game game(network, isHost ? PlayerID::ONE : PlayerID::TWO, selectedDeck);
-    game.run();
+    game.setBridge(&bridge); // TODO: could be part of constructor but very low priority
 
+    // game logic runs on separate thread so UI can render despite network I/O blocking
+    std::thread gameThread([&game]() {
+        game.run();
+    });
+
+    // rendering with SFML occurs on the main thread
+    GameRenderer renderer(bridge);
+    renderer.run();
+
+    gameThread.join();
     network.disconnect();
     return 0;
 }

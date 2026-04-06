@@ -1,0 +1,256 @@
+#include "GameRenderer.h"
+#include "../Cards/CardFactory.h"
+#include <iostream>
+#include <ranges>
+
+GameRenderer::GameRenderer(GameBridge& bridge)
+    : bridge(bridge),
+      window(sf::VideoMode({WINDOW_WIDTH, WINDOW_HEIGHT}), "Secure Card"),
+      font("resources/font.ttf")
+{
+    window.setFramerateLimit(60);
+    loadTextures();
+}
+
+[[nodiscard]] std::string getCardImagePath(CardID id) {
+    assert(id != CardID::End && "getCardImagePath called with CardID::End");
+
+    // TODO: Heap-instantiating cards every time we need to access their name is not efficient, but I don't know
+    // that there's a better way to do it. Constexpr card factory thing? Weird, and not pressing
+    std::string cardName = CardFactory::create(id)->getName();
+    std::erase(cardName, ' '); // remove the spaces from the card's name
+    return "resources/" + cardName + ".png";
+}
+
+void GameRenderer::loadTextures() {
+    for (int i = 0; i < static_cast<int>(CardID::End); i++) {
+        CardID id = static_cast<CardID>(i);
+        cardTextures[id] = sf::Texture(getCardImagePath(id));
+    }
+    cardbackTexture = sf::Texture("resources/cardback.png");
+}
+
+/**
+ * <b>Runs on main thread.</b> Returns either when the window is closed by the user or the game ends.
+ */
+void GameRenderer::run() {
+    while (window.isOpen()) {
+        while (auto event = window.pollEvent()) {
+            handleEvent(*event);
+        }
+
+        latestSnapshot = bridge.getSnapshot();
+
+        if (latestSnapshot.gameOver && latestSnapshot.winnerMessage.has_value()) {
+            // Keep rendering until window is closed
+        }
+
+        render(latestSnapshot);
+    }
+
+    bridge.requestQuit();
+}
+
+void GameRenderer::handleEvent(const sf::Event& event) {
+    if (event.is<sf::Event::Closed>()) {
+        window.close();
+        return;
+    }
+
+    if (const auto mouseEvent = event.getIf<sf::Event::MouseButtonPressed>()) {
+        if (mouseEvent->button != sf::Mouse::Button::Left) return;
+
+        auto mousePos = sf::Vector2f(mouseEvent->position);
+        if (!latestSnapshot.isMyTurn) return; // maybe more here at some point, but for now just end turn / click card
+
+        // check End Turn button
+        if (isEndTurnButtonClicked(mousePos)) {
+            bridge.submitInput(0);
+            return;
+        }
+
+        // check card clicks
+        int cardIndex = getClickedCardIndex(mousePos, latestSnapshot);
+        if (cardIndex > 0) {
+            bridge.submitInput(cardIndex);
+        }
+    }
+}
+
+/**
+ * Renders the GUI. Currently uses a lot of magic numbers which must be fixed.
+ * @param snapshot The snapshot, based on which the GUI will be rendered
+ */
+void GameRenderer::render(const GameSnapshot& snapshot) {
+    window.clear(sf::Color(30, 30, 40));
+
+    // opponent stats (top-left)
+    {
+        sf::Text text(font, "Opponent", 18);
+        text.setFillColor(sf::Color(200, 80, 80));
+        text.setPosition({20.f, 15.f});
+        window.draw(text);
+
+        sf::Text stats(font,
+            "HP: " + std::to_string(snapshot.oppHealth) +
+            "  |  Mana: " + std::to_string(snapshot.oppMana) +
+            "  |  Deck: " + std::to_string(snapshot.oppDeckSize), 16);
+        stats.setFillColor(sf::Color::White);
+        stats.setPosition({20.f, 40.f});
+        window.draw(stats);
+    }
+
+    // opponent's hand (top, face-down)
+    for (int i = 0; i < snapshot.oppHandSize; i++) {
+        auto bounds = getOpponentCardBounds(i, snapshot.oppHandSize);
+        sf::Sprite sprite(cardbackTexture);
+        sprite.setPosition({bounds.position.x, bounds.position.y});
+        sprite.setScale({
+            bounds.size.x / static_cast<float>(cardbackTexture.getSize().x),
+            bounds.size.y / static_cast<float>(cardbackTexture.getSize().y)
+        });
+        window.draw(sprite);
+    }
+
+    // local player's stats (bottom-left, above hand)
+    {
+        sf::Text text(font, "You", 18);
+        text.setFillColor(sf::Color(80, 200, 80));
+        text.setPosition({20.f, WINDOW_HEIGHT - 250.f});
+        window.draw(text);
+
+        sf::Text stats(font,
+            "HP: " + std::to_string(snapshot.myHealth) +
+            "  |  Mana: " + std::to_string(snapshot.myMana) +
+            "  |  Deck: " + std::to_string(snapshot.myDeckSize), 16);
+        stats.setFillColor(sf::Color::White);
+        stats.setPosition({20.f, WINDOW_HEIGHT - 225.f});
+        window.draw(stats);
+    }
+
+    // local player's hand (bottom, face-up)
+    int handSize = static_cast<int>(snapshot.myHand.size());
+    for (int i = 0; i < handSize; i++) {
+        CardID cardId = snapshot.myHand[i];
+        auto bounds = getPlayerCardBounds(i, handSize);
+
+        auto it = cardTextures.find(cardId);
+        if (it == cardTextures.end()) continue;
+
+        sf::Sprite sprite(it->second);
+        sprite.setPosition({bounds.position.x, bounds.position.y});
+        sprite.setScale({
+            bounds.size.x / static_cast<float>(it->second.getSize().x),
+            bounds.size.y / static_cast<float>(it->second.getSize().y)
+        });
+
+        // if player can't afford this card, dim it
+        auto card = CardFactory::create(cardId);
+        if (!snapshot.isMyTurn || card->getManaCost() > snapshot.myMana) {
+            sprite.setColor(sf::Color(128, 128, 128));
+        }
+
+        window.draw(sprite);
+
+        // draw mana cost label below card (though the card image texture currently also shows this)
+        sf::Text costText(font, std::to_string(card->getManaCost()), 14);
+        costText.setFillColor(sf::Color(100, 150, 255));
+        costText.setPosition({bounds.position.x + bounds.size.x / 2.f - 4.f, bounds.position.y + bounds.size.y + 2.f});
+        window.draw(costText);
+    }
+
+    // End Turn button
+    if (snapshot.isMyTurn && !snapshot.gameOver) {
+        auto btnBounds = getEndTurnButtonBounds();
+        sf::RectangleShape btn({btnBounds.size.x, btnBounds.size.y});
+        btn.setPosition({btnBounds.position.x, btnBounds.position.y});
+        btn.setFillColor(sf::Color(60, 120, 60));
+        btn.setOutlineColor(sf::Color::White);
+        btn.setOutlineThickness(2.f);
+        window.draw(btn);
+
+        sf::Text btnText(font, "End Turn", 18);
+        btnText.setFillColor(sf::Color::White);
+        btnText.setPosition({btnBounds.position.x + 15.f, btnBounds.position.y + 8.f});
+        window.draw(btnText);
+    }
+
+    // turn indicator
+    {
+        std::string turnText = snapshot.isMyTurn ? "Your Turn" : "Opponent's Turn";
+        sf::Text text(font, turnText, 22);
+        text.setFillColor(snapshot.isMyTurn ? sf::Color(80, 255, 80) : sf::Color(255, 80, 80));
+        text.setPosition({WINDOW_WIDTH / 2.f - 60.f, WINDOW_HEIGHT / 2.f - 50.f});
+        window.draw(text);
+    }
+
+    // status message
+    if (!snapshot.statusMessage.empty()) {
+        sf::Text text(font, snapshot.statusMessage, 16);
+        text.setFillColor(sf::Color(220, 220, 180));
+        text.setPosition({WINDOW_WIDTH / 2.f - 120.f, WINDOW_HEIGHT / 2.f - 15.f});
+        window.draw(text);
+    }
+
+    // game over
+    if (snapshot.gameOver && snapshot.winnerMessage.has_value()) {
+        // dim background
+        sf::RectangleShape overlay({static_cast<float>(WINDOW_WIDTH), static_cast<float>(WINDOW_HEIGHT)});
+        overlay.setFillColor(sf::Color(0, 0, 0, 150));
+        window.draw(overlay);
+
+        sf::Text text(font, snapshot.winnerMessage.value(), 36);
+        text.setFillColor(sf::Color::White);
+        text.setPosition({WINDOW_WIDTH / 2.f - 100.f, WINDOW_HEIGHT / 2.f - 20.f});
+        window.draw(text);
+    }
+
+    window.display();
+}
+
+// TODO: All methods below use HARD-CODED VALUES for screen space calculations. Must be updated to use relative positions
+
+/**
+ * Gets the card bounds of a card in the local player's hand. Used to render the card and check if it was clicked.
+ * @param index Index of card
+ * @param handSize Number of cards in hand
+ * @return FloatRect bounds for the card
+ */
+sf::FloatRect GameRenderer::getPlayerCardBounds(int index, int handSize) const {
+    float totalWidth = handSize * CARD_WIDTH + (handSize - 1) * CARD_SPACING;
+    float startX = (WINDOW_WIDTH - totalWidth) / 2.f;
+    float x = startX + index * (CARD_WIDTH + CARD_SPACING);
+    float y = WINDOW_HEIGHT - CARD_HEIGHT - 30.f;
+    return sf::FloatRect({x, y}, {CARD_WIDTH, CARD_HEIGHT});
+}
+
+sf::FloatRect GameRenderer::getOpponentCardBounds(int index, int handSize) const {
+    float totalWidth = handSize * CARD_WIDTH + (handSize - 1) * CARD_SPACING;
+    float startX = (WINDOW_WIDTH - totalWidth) / 2.f;
+    float x = startX + index * (CARD_WIDTH + CARD_SPACING);
+    float y = 70.f;
+    return sf::FloatRect({x, y}, {CARD_WIDTH, CARD_HEIGHT});
+}
+
+sf::FloatRect GameRenderer::getEndTurnButtonBounds() const {
+    return sf::FloatRect({WINDOW_WIDTH - 160.f, WINDOW_HEIGHT / 2.f - 25.f}, {130.f, 45.f});
+}
+
+/**
+ * @return 1-based hand index of clicked card. 0 = none
+ */
+int GameRenderer::getClickedCardIndex(sf::Vector2f mousePos, const GameSnapshot& snapshot) const {
+    int handSize = static_cast<int>(snapshot.myHand.size());
+    // check in reverse order so topmost (rightmost overlapping) card wins
+    for (int i = handSize - 1; i >= 0; i--) {
+        auto bounds = getPlayerCardBounds(i, handSize);
+        if (bounds.contains(mousePos)) {
+            return i + 1; // 1-based
+        }
+    }
+    return 0;
+}
+
+bool GameRenderer::isEndTurnButtonClicked(sf::Vector2f mousePos) const {
+    return getEndTurnButtonBounds().contains(mousePos);
+}

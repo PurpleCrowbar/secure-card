@@ -6,12 +6,18 @@
 #include "../PlayerID.h"
 #include "../Verification/GameVerifier.h"
 
+class GameBridge;
+struct GameSnapshot;
+
 class Game {
 public:
     Game(Network& network, PlayerID localPlayer, const std::map<CardID, uint8_t>& localDeckContents);
 
     // Runs game lifecycle (initial shuffle, draw opening hands, main game loop)
     void run();
+
+    // Set the GUI bridge for SFML mode (nullptr = CLI mode)
+    void setBridge(GameBridge* b) { bridge = b; }
 
     // Game actions. Mutative methods used by cards' resolve methods
     void dealDamage(PlayerID target, int amount);
@@ -50,6 +56,11 @@ private:
     // post-game: exchange all secret data and run the verifier
     void postGameExchangeAndVerify();
 
+    // GUI helpers
+    GameSnapshot buildSnapshot(const std::string& statusMessage = "") const;
+    void publishSnapshot(const std::string& statusMessage = "");
+
+    GameBridge* bridge = nullptr; // for multithreading
     PlayerID localPlayer;
     // Local player's deck's contents from the start of the game. Sent post-game for verification
     const std::map<CardID, uint8_t> localDeckContents;

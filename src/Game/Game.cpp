@@ -3,20 +3,70 @@
 #include <algorithm>
 #include "../Cards/CardFactory.h"
 #include "../DeckCommitment.h"
+#include "../GUI/GameBridge.h"
 
 Game::Game(Network& network, PlayerID localPlayer, const std::map<CardID, uint8_t>& localDeckContents)
     : network(network), verifier(localDeckContents, localPlayer),
     state(localDeckContents, localPlayer), localPlayer(localPlayer),
     localDeckContents(localDeckContents) {}
 
+/**
+ * Generates a GameSnapshot (basically a container of important game info) from the data in the gamestate. Used for GUI.
+ * @param statusMessage Status message to include with the snapshot
+ * @return A GameSnapshot object to be used in the GUI renderer
+ */
+GameSnapshot Game::buildSnapshot(const std::string& statusMessage) const {
+    PlayerID opponent = PlayerIDUtils::getOpponent(localPlayer);
+    const auto& myData = state.getImmutablePlayerData(localPlayer);
+    const auto& oppData = state.getImmutablePlayerData(opponent);
+
+    GameSnapshot snap;
+    snap.myHealth = myData.currentHealth;
+    snap.myMana = myData.currentMana;
+    snap.myDeckSize = myData.deck.getSize();
+
+    if (const auto hand = std::get_if<ClearHand>(&myData.hand)) {
+        snap.myHand = hand->ui_getHandContents();
+    }
+
+    snap.oppHealth = oppData.currentHealth;
+    snap.oppMana = oppData.currentMana;
+    snap.oppDeckSize = oppData.deck.getSize();
+    snap.oppHandSize = static_cast<int>(state.getHandSize(opponent));
+
+    snap.isMyTurn = state.activePlayer.has_value() && state.activePlayer.value() == localPlayer;
+    snap.statusMessage = statusMessage;
+
+    auto [gameOver, winner] = state.isGameOver();
+    snap.gameOver = gameOver;
+    if (gameOver) {
+        if (!winner.has_value()) snap.winnerMessage = "It's a tie!";
+        else if (winner.value() == localPlayer) snap.winnerMessage = "You win!";
+        else snap.winnerMessage = "You lose!";
+    }
+
+    return snap;
+}
+
+/**
+ * Updates the UI with a snapshot of the game data.
+ * @param statusMessage Optional status message for this snapshot
+ */
+void Game::publishSnapshot(const std::string& statusMessage) {
+    if (bridge) bridge->publishState(buildSnapshot(statusMessage));
+}
+
 void Game::run() {
+    publishSnapshot("Exchanging deck commitments...");
     exchangeDeckCommitments();
 
     std::cout << "\n=== Shuffling decks ===\n";
+    publishSnapshot("Shuffling decks...");
     performShuffle(PlayerID::ONE);
     performShuffle(PlayerID::TWO);
 
     std::cout << "\n=== Drawing opening hands ===\n";
+    publishSnapshot("Drawing opening hands...");
     drawCards(PlayerID::ONE, 4);
     drawCards(PlayerID::TWO, 4);
 
@@ -24,6 +74,7 @@ void Game::run() {
     state.activePlayer = PlayerID::ONE;
     verifier.setPlayerGoingFirst(state.activePlayer.value());
     std::cout << "\n=== Game starting! ===\n";
+    publishSnapshot();
 
     // First turn doesn't draw (like MtG: player going first skips first draw)
     bool firstTurn = true;
@@ -54,7 +105,9 @@ void Game::run() {
         std::cout << "You lose!\n";
     }
 
+    publishSnapshot("Game over! Running verification...");
     postGameExchangeAndVerify();
+    publishSnapshot();
 }
 
 /**
@@ -425,35 +478,41 @@ void Game::advanceTurn() {
 void Game::runMyTurn() {
     auto& myData = state.getPlayerData(localPlayer);
 
-    // Reset mana at the start of our action phase
-    // (already done in startTurn, but if this is turn 1 we reset here)
-    // Actually: let's just ensure mana is correct
-    // myData.currentMana is set by startTurn() already
-
     while (true) {
-        printGameState();
         auto& hand = std::get<ClearHand>(myData.hand);
 
-        // check if we can actually play anything
-        // TODO: actually, why do we even bother doing this? maybe instead just generate a set of indices of cards we can play
-        bool canPlay = false;
-        for (const auto& entry : hand.ui_getHandContents()) {
-            auto card = CardFactory::create(entry);
-            if (card->getManaCost() <= myData.currentMana) {
-                canPlay = true;
-                break;
-            }
-        }
-
-        if (hand.getSize() == 0) {
-            std::cout << "No cards in hand. ";
-        }
-
-        // user prompt
-        // TODO: upgrade this to UI events
-        std::cout << "\nEnter card number to play (1-" << std::to_string(hand.getSize()) << "), or 0 to end turn: ";
         int choice;
-        std::cin >> choice;
+        // if bridge between UI and game logic exists i.e., if we're playing with UI enabled)
+        if (bridge) {
+            auto snapshot = buildSnapshot();
+            snapshot.isMyTurn = true;
+            choice = bridge->publishStateAndWaitForInput(snapshot);
+            if (choice == -1) {
+                // Window closed so concede and exit
+                network.sendPacketType(PacketType::CONCEDE);
+                state.getPlayerData(localPlayer).currentHealth = 0;
+                return;
+            }
+        } else {
+            printGameState();
+
+            // check if we can actually play anything
+            bool canPlay = false;
+            for (const auto& entry : hand.ui_getHandContents()) {
+                auto card = CardFactory::create(entry);
+                if (card->getManaCost() <= myData.currentMana) {
+                    canPlay = true;
+                    break;
+                }
+            }
+
+            if (hand.getSize() == 0) {
+                std::cout << "No cards in hand. ";
+            }
+
+            std::cout << "\nEnter card number to play (1-" << std::to_string(hand.getSize()) << "), or 0 to end turn: ";
+            std::cin >> choice;
+        }
 
         if (choice == 0) {
             network.sendPacketType(PacketType::END_TURN);
@@ -522,6 +581,7 @@ void Game::playCardLocal(int handIndex) {
  */
 void Game::runOpponentTurn() {
     std::cout << "\n--- Opponent's turn ---\n";
+    publishSnapshot("Opponent's turn...");
     // main loop while on opponent's turn
     while (true) {
         switch (PacketType packetType = network.receivePacketType()) {
@@ -533,6 +593,7 @@ void Game::runOpponentTurn() {
             }
             case PLAY_CARD: {
                 handleOpponentPlayCard();
+                publishSnapshot();
                 if (state.isGameOver().first) return;
                 break;
             }
@@ -541,6 +602,7 @@ void Game::runOpponentTurn() {
                 // Set opponent's health to 0 to trigger game over
                 auto& oppData = state.getOpponentPlayerData(localPlayer);
                 oppData.currentHealth = 0;
+                publishSnapshot();
                 return;
             }
             default:
