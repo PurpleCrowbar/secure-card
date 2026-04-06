@@ -3,12 +3,15 @@
 #include <iostream>
 #include <ranges>
 
-GameRenderer::GameRenderer(GameBridge& bridge)
+GameRenderer::GameRenderer(GameBridge& bridge, PlayerID player)
     : bridge(bridge),
-      window(sf::VideoMode({WINDOW_WIDTH, WINDOW_HEIGHT}), "Secure Card"),
-      font("resources/font.ttf")
+      window(sf::VideoMode({1280u, 720u}),
+          std::string("Secure Card - Player ") + (player == PlayerID::ONE ? "One (Host)" : "Two (Client)")),
+      font("resources/font.ttf"),
+      gameView(sf::FloatRect({0.f, 0.f}, {LOGICAL_WIDTH, LOGICAL_HEIGHT}))
 {
     window.setFramerateLimit(60);
+    window.setView(gameView);
     loadTextures();
 }
 
@@ -57,10 +60,15 @@ void GameRenderer::handleEvent(const sf::Event& event) {
         return;
     }
 
+    if (const auto resized = event.getIf<sf::Event::Resized>()) {
+        updateViewport(resized->size);
+        return;
+    }
+
     if (const auto mouseEvent = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mouseEvent->button != sf::Mouse::Button::Left) return;
 
-        auto mousePos = sf::Vector2f(mouseEvent->position);
+        auto mousePos = window.mapPixelToCoords(mouseEvent->position);
         if (!latestSnapshot.isMyTurn) return; // maybe more here at some point, but for now just end turn / click card
 
         // check End Turn button
@@ -82,7 +90,13 @@ void GameRenderer::handleEvent(const sf::Event& event) {
  * @param snapshot The snapshot, based on which the GUI will be rendered
  */
 void GameRenderer::render(const GameSnapshot& snapshot) {
-    window.clear(sf::Color(30, 30, 40));
+    window.clear(sf::Color::Black);
+    window.setView(gameView);
+
+    // draw game background within the logical viewport
+    sf::RectangleShape bg({LOGICAL_WIDTH, LOGICAL_HEIGHT});
+    bg.setFillColor(sf::Color(30, 30, 40));
+    window.draw(bg);
 
     // opponent stats (top-left)
     {
@@ -116,7 +130,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
     {
         sf::Text text(font, "You", 18);
         text.setFillColor(sf::Color(80, 200, 80));
-        text.setPosition({20.f, WINDOW_HEIGHT - 250.f});
+        text.setPosition({20.f, LOGICAL_HEIGHT - 250.f});
         window.draw(text);
 
         sf::Text stats(font,
@@ -124,7 +138,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
             "  |  Mana: " + std::to_string(snapshot.myMana) +
             "  |  Deck: " + std::to_string(snapshot.myDeckSize), 16);
         stats.setFillColor(sf::Color::White);
-        stats.setPosition({20.f, WINDOW_HEIGHT - 225.f});
+        stats.setPosition({20.f, LOGICAL_HEIGHT - 225.f});
         window.draw(stats);
     }
 
@@ -180,7 +194,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
         std::string turnText = snapshot.isMyTurn ? "Your Turn" : "Opponent's Turn";
         sf::Text text(font, turnText, 22);
         text.setFillColor(snapshot.isMyTurn ? sf::Color(80, 255, 80) : sf::Color(255, 80, 80));
-        text.setPosition({WINDOW_WIDTH / 2.f - 60.f, WINDOW_HEIGHT / 2.f - 50.f});
+        text.setPosition({LOGICAL_WIDTH / 2.f - 60.f, LOGICAL_HEIGHT / 2.f - 50.f});
         window.draw(text);
     }
 
@@ -188,27 +202,50 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
     if (!snapshot.statusMessage.empty()) {
         sf::Text text(font, snapshot.statusMessage, 16);
         text.setFillColor(sf::Color(220, 220, 180));
-        text.setPosition({WINDOW_WIDTH / 2.f - 120.f, WINDOW_HEIGHT / 2.f - 15.f});
+        text.setPosition({LOGICAL_WIDTH / 2.f - 120.f, LOGICAL_HEIGHT / 2.f - 15.f});
         window.draw(text);
     }
 
     // game over
     if (snapshot.gameOver && snapshot.winnerMessage.has_value()) {
-        // dim background
-        sf::RectangleShape overlay({static_cast<float>(WINDOW_WIDTH), static_cast<float>(WINDOW_HEIGHT)});
+        // dim the entire physical window (including letterbox bars) using the default view
+        window.setView(window.getDefaultView());
+        auto winSize = window.getSize();
+        sf::RectangleShape overlay({static_cast<float>(winSize.x), static_cast<float>(winSize.y)});
         overlay.setFillColor(sf::Color(0, 0, 0, 150));
         window.draw(overlay);
 
+        // switch back to game view for text positioning
+        window.setView(gameView);
         sf::Text text(font, snapshot.winnerMessage.value(), 36);
         text.setFillColor(sf::Color::White);
-        text.setPosition({WINDOW_WIDTH / 2.f - 100.f, WINDOW_HEIGHT / 2.f - 20.f});
+        text.setPosition({LOGICAL_WIDTH / 2.f - 100.f, LOGICAL_HEIGHT / 2.f - 20.f});
         window.draw(text);
     }
 
     window.display();
 }
 
-// TODO: All methods below use HARD-CODED VALUES for screen space calculations. Must be updated to use relative positions
+void GameRenderer::updateViewport(sf::Vector2u windowSize) {
+    float windowRatio = static_cast<float>(windowSize.x) / static_cast<float>(windowSize.y);
+    float viewRatio = LOGICAL_WIDTH / LOGICAL_HEIGHT;
+
+    float vpWidth = 1.f, vpHeight = 1.f;
+    float vpX = 0.f, vpY = 0.f;
+
+    if (windowRatio > viewRatio) {
+        // window wider than 16:9, need to use pillarbox
+        vpWidth = viewRatio / windowRatio;
+        vpX = (1.f - vpWidth) / 2.f;
+    } else {
+        // window taller than 16:9, so need to use letterbox
+        vpHeight = windowRatio / viewRatio;
+        vpY = (1.f - vpHeight) / 2.f;
+    }
+
+    gameView.setViewport(sf::FloatRect({vpX, vpY}, {vpWidth, vpHeight}));
+    window.setView(gameView);
+}
 
 /**
  * Gets the card bounds of a card in the local player's hand. Used to render the card and check if it was clicked.
@@ -218,22 +255,22 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
  */
 sf::FloatRect GameRenderer::getPlayerCardBounds(int index, int handSize) const {
     float totalWidth = handSize * CARD_WIDTH + (handSize - 1) * CARD_SPACING;
-    float startX = (WINDOW_WIDTH - totalWidth) / 2.f;
+    float startX = (LOGICAL_WIDTH - totalWidth) / 2.f;
     float x = startX + index * (CARD_WIDTH + CARD_SPACING);
-    float y = WINDOW_HEIGHT - CARD_HEIGHT - 30.f;
+    float y = LOGICAL_HEIGHT - CARD_HEIGHT - 30.f;
     return sf::FloatRect({x, y}, {CARD_WIDTH, CARD_HEIGHT});
 }
 
 sf::FloatRect GameRenderer::getOpponentCardBounds(int index, int handSize) const {
     float totalWidth = handSize * CARD_WIDTH + (handSize - 1) * CARD_SPACING;
-    float startX = (WINDOW_WIDTH - totalWidth) / 2.f;
+    float startX = (LOGICAL_WIDTH - totalWidth) / 2.f;
     float x = startX + index * (CARD_WIDTH + CARD_SPACING);
     float y = 70.f;
     return sf::FloatRect({x, y}, {CARD_WIDTH, CARD_HEIGHT});
 }
 
 sf::FloatRect GameRenderer::getEndTurnButtonBounds() const {
-    return sf::FloatRect({WINDOW_WIDTH - 160.f, WINDOW_HEIGHT / 2.f - 25.f}, {130.f, 45.f});
+    return sf::FloatRect({LOGICAL_WIDTH - 160.f, LOGICAL_HEIGHT / 2.f - 25.f}, {130.f, 45.f});
 }
 
 /**

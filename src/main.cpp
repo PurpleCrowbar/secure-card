@@ -18,7 +18,12 @@ int main(const int argc, char** argv) {
         std::cerr << "Usage: " << argv[0] << " <host|client>\n";
         return 1;
     }
-    bool isHost = std::string(argv[1]) == "host";
+    bool isHost = true;
+    PlayerID player = PlayerID::ONE;
+    if (std::string(argv[1]) == "client") {
+        isHost = false;
+        player = PlayerID::TWO;
+    }
 
     LookupTable::instance(); // generate lookup table
     Network network;
@@ -33,7 +38,7 @@ int main(const int argc, char** argv) {
     selectedDeck[CardID::SPECTRAL_WAIL] = 5;
 
     GameBridge bridge;
-    Game game(network, isHost ? PlayerID::ONE : PlayerID::TWO, selectedDeck);
+    Game game(network, player, selectedDeck);
     game.setBridge(&bridge); // TODO: could be part of constructor but very low priority
 
     // game logic runs on separate thread so UI can render despite network I/O blocking
@@ -41,8 +46,8 @@ int main(const int argc, char** argv) {
         game.run();
     });
 
-    // rendering with SFML occurs on the main thread
-    GameRenderer renderer(bridge);
+    // rendering with SFML occurs on the main thread. Player ID needed to determine the window title
+    GameRenderer renderer(bridge, player);
     renderer.run();
 
     gameThread.join();

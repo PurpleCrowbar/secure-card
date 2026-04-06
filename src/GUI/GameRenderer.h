@@ -1,13 +1,14 @@
 #pragma once
-
 #include <SFML/Graphics.hpp>
 #include <map>
 #include "GameBridge.h"
 #include "../Cards/CardID.h"
 
+enum class PlayerID : std::uint8_t;
+
 class GameRenderer {
 public:
-    explicit GameRenderer(GameBridge& bridge);
+    explicit GameRenderer(GameBridge& bridge, PlayerID player);
 
     void run();
 
@@ -27,16 +28,22 @@ private:
     GameBridge& bridge;
     sf::RenderWindow window;
     sf::Font font;
+    sf::View gameView;
 
     std::map<CardID, sf::Texture> cardTextures;
     sf::Texture cardbackTexture;
 
     GameSnapshot latestSnapshot;
 
-    // TODO: must not use hard-coded values; adapt to screen size
-    static constexpr float CARD_WIDTH = 120.f;
-    static constexpr float CARD_HEIGHT = 168.f;
+    void updateViewport(sf::Vector2u windowSize);
+
+    // these values (width and height) maintain the aspect ratio of the real card images (785x1100 = 157:220).
+    // they don't nececssarily have to be hard-coded though; could be calculated at game time in case I
+    // ever change the images? low priority at any rate
+    static constexpr float CARD_WIDTH = 157.f;
+    static constexpr float CARD_HEIGHT = 220.f;
     static constexpr float CARD_SPACING = 10.f;
-    static constexpr unsigned int WINDOW_WIDTH = 1280;
-    static constexpr unsigned int WINDOW_HEIGHT = 720;
+    // i.e., width / height of window within letterboxed view
+    static constexpr float LOGICAL_WIDTH = 1280.f;
+    static constexpr float LOGICAL_HEIGHT = 720.f;
 };
