@@ -51,6 +51,7 @@ private:
     sf::Texture cardbackTexture;
 
     GameSnapshot latestSnapshot;
+    sf::Vector2f mousePos;
 
     std::optional<CardAnimation> activeAnimation;
     sf::Clock frameClock;

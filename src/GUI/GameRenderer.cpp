@@ -38,8 +38,9 @@ void GameRenderer::loadTextures() {
 }
 
 
+constexpr float textOversample = 3.f;
+
 sf::Text makeText(const sf::Font& font, const std::string& str, unsigned int logicalSize) {
-    constexpr float textOversample = 3.f;
     sf::Text text(font, str, static_cast<unsigned int>(logicalSize * textOversample));
     text.setScale({1.f / textOversample, 1.f / textOversample});
     return text;
@@ -61,6 +62,7 @@ void GameRenderer::run() {
             handleEvent(*event);
         }
 
+        mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window), gameView);
         latestSnapshot = bridge.getSnapshot();
 
         // Start animation if opponent did something and we're not already animating
@@ -175,7 +177,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
         auto bounds = getPlayerCardBounds(i, handSize);
 
         auto it = cardTextures.find(cardId);
-        if (it == cardTextures.end()) continue;
+        if (it == cardTextures.end()) continue; // TODO: should maybe throw or use some placeholder for missing textures
 
         sf::Sprite sprite(it->second);
         sprite.setPosition(snapToPixel(window, gameView, bounds.position));
@@ -184,13 +186,24 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
             bounds.size.y / static_cast<float>(it->second.getSize().y)
         });
 
-        // if player can't afford this card, dim it
         auto card = CardFactory::create(cardId);
-        if (!snapshot.isMyTurn || card->getManaCost() > snapshot.myMana) {
+        bool affordable = snapshot.isMyTurn && card->getManaCost() <= snapshot.myMana;
+
+        // grey out any cards we can't afford
+        if (!affordable) {
             sprite.setColor(sf::Color(128, 128, 128));
         }
 
         window.draw(sprite);
+
+        // because the sprite's colour is 255,255,255 by default, it's impossible to make it lighter. the workaround
+        // I'm using here is just to render a transparent white rectangle over the card if it's being moused over
+        if (affordable && bounds.contains(mousePos)) {
+            sf::RectangleShape highlight(bounds.size);
+            highlight.setPosition(sprite.getPosition());
+            highlight.setFillColor(sf::Color(255, 255, 255, 60));
+            window.draw(highlight);
+        }
 
         // draw mana cost label below card (though the card image texture currently also shows this)
         auto costText = makeText(font, std::to_string(card->getManaCost()), 14);
@@ -202,16 +215,22 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
     // End Turn button
     if (snapshot.isMyTurn && !snapshot.gameOver) {
         auto btnBounds = getEndTurnButtonBounds();
+        bool btnHovered = btnBounds.contains(mousePos);
+
         sf::RectangleShape btn({btnBounds.size.x, btnBounds.size.y});
         btn.setPosition({btnBounds.position.x, btnBounds.position.y});
-        btn.setFillColor(sf::Color(60, 120, 60));
+        btn.setFillColor(btnHovered ? sf::Color(80, 160, 80) : sf::Color(60, 120, 60));
         btn.setOutlineColor(sf::Color::White);
         btn.setOutlineThickness(2.f);
         window.draw(btn);
 
         auto btnText = makeText(font, "End Turn", 18);
         btnText.setFillColor(sf::Color::White);
-        btnText.setPosition({btnBounds.position.x + 15.f, btnBounds.position.y + 8.f});
+        auto textBounds = btnText.getLocalBounds();
+        btnText.setPosition({
+            btnBounds.position.x + (btnBounds.size.x - textBounds.size.x / textOversample) / 2.f,
+            btnBounds.position.y + (btnBounds.size.y - textBounds.size.y / textOversample) / 2.f - textBounds.position.y / textOversample
+        });
         window.draw(btnText);
     }
 
