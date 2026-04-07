@@ -31,8 +31,23 @@ void GameRenderer::loadTextures() {
     for (int i = 0; i < static_cast<int>(CardID::End); i++) {
         CardID id = static_cast<CardID>(i);
         cardTextures[id] = sf::Texture(getCardImagePath(id));
+        cardTextures[id].setSmooth(true);
     }
     cardbackTexture = sf::Texture("resources/cardback.png");
+    cardbackTexture.setSmooth(true);
+}
+
+
+sf::Text makeText(const sf::Font& font, const std::string& str, unsigned int logicalSize) {
+    constexpr float textOversample = 3.f;
+    sf::Text text(font, str, static_cast<unsigned int>(logicalSize * textOversample));
+    text.setScale({1.f / textOversample, 1.f / textOversample});
+    return text;
+}
+
+sf::Vector2f snapToPixel(const sf::RenderWindow& window, const sf::View& view, sf::Vector2f logicalPos) {
+    auto pixel = window.mapCoordsToPixel(logicalPos, view);
+    return window.mapPixelToCoords(pixel, view);
 }
 
 /**
@@ -111,12 +126,12 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
 
     // opponent stats (top-left)
     {
-        sf::Text text(font, "Opponent", 18);
+        auto text = makeText(font, "Opponent", 18);
         text.setFillColor(sf::Color(200, 80, 80));
         text.setPosition({20.f, 15.f});
         window.draw(text);
 
-        sf::Text stats(font,
+        auto stats = makeText(font,
             "HP: " + std::to_string(snapshot.oppHealth) +
             "  |  Mana: " + std::to_string(snapshot.oppMana) +
             "  |  Deck: " + std::to_string(snapshot.oppDeckSize), 16);
@@ -129,7 +144,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
     for (int i = 0; i < snapshot.oppHandSize; i++) {
         auto bounds = getOpponentCardBounds(i, snapshot.oppHandSize);
         sf::Sprite sprite(cardbackTexture);
-        sprite.setPosition({bounds.position.x, bounds.position.y});
+        sprite.setPosition(snapToPixel(window, gameView, bounds.position));
         sprite.setScale({
             bounds.size.x / static_cast<float>(cardbackTexture.getSize().x),
             bounds.size.y / static_cast<float>(cardbackTexture.getSize().y)
@@ -139,12 +154,12 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
 
     // local player's stats (bottom-left, above hand)
     {
-        sf::Text text(font, "You", 18);
+        auto text = makeText(font, "You", 18);
         text.setFillColor(sf::Color(80, 200, 80));
         text.setPosition({20.f, LOGICAL_HEIGHT - 250.f});
         window.draw(text);
 
-        sf::Text stats(font,
+        auto stats = makeText(font,
             "HP: " + std::to_string(snapshot.myHealth) +
             "  |  Mana: " + std::to_string(snapshot.myMana) +
             "  |  Deck: " + std::to_string(snapshot.myDeckSize), 16);
@@ -163,7 +178,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
         if (it == cardTextures.end()) continue;
 
         sf::Sprite sprite(it->second);
-        sprite.setPosition({bounds.position.x, bounds.position.y});
+        sprite.setPosition(snapToPixel(window, gameView, bounds.position));
         sprite.setScale({
             bounds.size.x / static_cast<float>(it->second.getSize().x),
             bounds.size.y / static_cast<float>(it->second.getSize().y)
@@ -178,7 +193,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
         window.draw(sprite);
 
         // draw mana cost label below card (though the card image texture currently also shows this)
-        sf::Text costText(font, std::to_string(card->getManaCost()), 14);
+        auto costText = makeText(font, std::to_string(card->getManaCost()), 14);
         costText.setFillColor(sf::Color(100, 150, 255));
         costText.setPosition({bounds.position.x + bounds.size.x / 2.f - 4.f, bounds.position.y + bounds.size.y + 2.f});
         window.draw(costText);
@@ -194,7 +209,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
         btn.setOutlineThickness(2.f);
         window.draw(btn);
 
-        sf::Text btnText(font, "End Turn", 18);
+        auto btnText = makeText(font, "End Turn", 18);
         btnText.setFillColor(sf::Color::White);
         btnText.setPosition({btnBounds.position.x + 15.f, btnBounds.position.y + 8.f});
         window.draw(btnText);
@@ -203,7 +218,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
     // turn indicator
     {
         std::string turnText = snapshot.isMyTurn ? "Your Turn" : "Opponent's Turn";
-        sf::Text text(font, turnText, 22);
+        auto text = makeText(font, turnText, 22);
         text.setFillColor(snapshot.isMyTurn ? sf::Color(80, 255, 80) : sf::Color(255, 80, 80));
         text.setPosition({LOGICAL_WIDTH / 2.f - 60.f, LOGICAL_HEIGHT / 2.f - 50.f});
         window.draw(text);
@@ -211,7 +226,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
 
     // status message
     if (!snapshot.statusMessage.empty()) {
-        sf::Text text(font, snapshot.statusMessage, 16);
+        auto text = makeText(font, snapshot.statusMessage, 16);
         text.setFillColor(sf::Color(220, 220, 180));
         text.setPosition({LOGICAL_WIDTH / 2.f - 120.f, LOGICAL_HEIGHT / 2.f - 15.f});
         window.draw(text);
@@ -243,7 +258,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
         auto it = cardTextures.find(anim.card);
         if (it != cardTextures.end()) {
             sf::Sprite sprite(it->second);
-            sprite.setPosition(pos);
+            sprite.setPosition(snapToPixel(window, gameView, pos));
             sprite.setScale({
                 CARD_WIDTH / static_cast<float>(it->second.getSize().x),
                 CARD_HEIGHT / static_cast<float>(it->second.getSize().y)
@@ -265,7 +280,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
 
         // switch back to game view for text positioning
         window.setView(gameView);
-        sf::Text text(font, snapshot.winnerMessage.value(), 36);
+        auto text = makeText(font, snapshot.winnerMessage.value(), 36);
         text.setFillColor(sf::Color::White);
         text.setPosition({LOGICAL_WIDTH / 2.f - 100.f, LOGICAL_HEIGHT / 2.f - 20.f});
         window.draw(text);
