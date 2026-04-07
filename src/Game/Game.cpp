@@ -15,7 +15,7 @@ Game::Game(Network& network, PlayerID localPlayer, const std::map<CardID, uint8_
  * @param statusMessage Status message to include with the snapshot
  * @return A GameSnapshot object to be used in the GUI renderer
  */
-GameSnapshot Game::buildSnapshot(const std::string& statusMessage) const {
+GameSnapshot Game::buildSnapshot(const std::string& statusMessage) {
     PlayerID opponent = PlayerIDUtils::getOpponent(localPlayer);
     const auto& myData = state.getImmutablePlayerData(localPlayer);
     const auto& oppData = state.getImmutablePlayerData(opponent);
@@ -36,6 +36,11 @@ GameSnapshot Game::buildSnapshot(const std::string& statusMessage) const {
 
     snap.isMyTurn = state.activePlayer.has_value() && state.activePlayer.value() == localPlayer;
     snap.statusMessage = statusMessage;
+
+    if (pendingOppEvent.has_value()) {
+        snap.oppCardEvent = pendingOppEvent;
+        pendingOppEvent.reset();
+    }
 
     auto [gameOver, winner] = state.isGameOver();
     snap.gameOver = gameOver;
@@ -318,7 +323,7 @@ void Game::performShuffle(PlayerID deckOwner) {
 }
 
 void Game::discard(PlayerID player, CardID card) {
-    auto playerData = state.getPlayerData(player);
+    auto& playerData = state.getPlayerData(player);
     if (auto clearHand = std::get_if<ClearHand>(&playerData.hand)) {
         if (!clearHand->removeCard(card)) {
             throw std::runtime_error(std::format(
@@ -330,6 +335,9 @@ void Game::discard(PlayerID player, CardID card) {
         auto& unknownHand = std::get<UnknownHand>(playerData.hand);
         // This returns false if hand is empty. Could throw exception if desired, but I think it's OK
         unknownHand.removeCard();
+    }
+    if (player != localPlayer) {
+        pendingOppEvent = OpponentCardEvent {card, OpponentCardEventType::DISCARD};
     }
     playerData.graveyard.push_back(card);
     verifier.logAction(Action::Discard(player, card));
@@ -581,7 +589,7 @@ void Game::playCardLocal(int handIndex) {
  */
 void Game::runOpponentTurn() {
     std::cout << "\n--- Opponent's turn ---\n";
-    publishSnapshot("Opponent's turn...");
+    publishSnapshot();
     // main loop while on opponent's turn
     while (true) {
         switch (PacketType packetType = network.receivePacketType()) {
@@ -638,6 +646,7 @@ void Game::handleOpponentPlayCard() {
     network.sendPacketType(PacketType::PERMITTED);
     std::cout << "  Opponent plays " << card->getName() << "!\n";
     verifier.logAction(Action::PlayCard(PlayerIDUtils::getOpponent(localPlayer), cardId));
+    pendingOppEvent = OpponentCardEvent{cardId, OpponentCardEventType::PLAY};
 
     // opponent spent mana
     oppData.currentMana -= card->getManaCost();

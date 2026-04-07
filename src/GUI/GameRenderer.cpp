@@ -2,6 +2,8 @@
 #include "../Cards/CardFactory.h"
 #include <iostream>
 #include <ranges>
+#include <algorithm>
+#include <sodium/randombytes.h>
 
 GameRenderer::GameRenderer(GameBridge& bridge, PlayerID player)
     : bridge(bridge),
@@ -38,14 +40,23 @@ void GameRenderer::loadTextures() {
  */
 void GameRenderer::run() {
     while (window.isOpen()) {
+        float dt = frameClock.restart().asSeconds();
+
         while (auto event = window.pollEvent()) {
             handleEvent(*event);
         }
 
         latestSnapshot = bridge.getSnapshot();
 
-        if (latestSnapshot.gameOver && latestSnapshot.winnerMessage.has_value()) {
-            // Keep rendering until window is closed
+        // Start animation if opponent did something and we're not already animating
+        if (latestSnapshot.oppCardEvent.has_value() && !activeAnimation.has_value()) {
+            startAnimation(latestSnapshot.oppCardEvent.value(), latestSnapshot);
+        }
+
+        // Advance animation
+        if (activeAnimation.has_value()) {
+            activeAnimation->elapsed += dt;
+            if (activeAnimation->isComplete()) activeAnimation.reset();
         }
 
         render(latestSnapshot);
@@ -206,6 +217,43 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
         window.draw(text);
     }
 
+    // opponent card animation
+    if (activeAnimation.has_value()) {
+        const auto& anim = activeAnimation.value();
+        float t = anim.elapsed;
+
+        // compute position (how far from hand) and alpha based on animation phase
+        sf::Vector2f pos;
+        uint8_t alpha = 255;
+        if (t < CardAnimation::SLIDE_DURATION) {
+            // slide phase: so lerp from start to end
+            float progress = t / CardAnimation::SLIDE_DURATION;
+            pos.x = anim.startPos.x + (anim.endPos.x - anim.startPos.x) * progress;
+            pos.y = anim.startPos.y + (anim.endPos.y - anim.startPos.y) * progress;
+        } else if (t < CardAnimation::SLIDE_DURATION + CardAnimation::HOLD_DURATION) {
+            // hold phase: stay at end position
+            pos = anim.endPos;
+        } else {
+            // fade phase: stay at end, reduce alpha
+            pos = anim.endPos;
+            float fadeProgress = (t - CardAnimation::SLIDE_DURATION - CardAnimation::HOLD_DURATION) / CardAnimation::FADE_DURATION;
+            alpha = static_cast<uint8_t>(255.f * (1.f - std::min(fadeProgress, 1.f)));
+        }
+
+        auto it = cardTextures.find(anim.card);
+        if (it != cardTextures.end()) {
+            sf::Sprite sprite(it->second);
+            sprite.setPosition(pos);
+            sprite.setScale({
+                CARD_WIDTH / static_cast<float>(it->second.getSize().x),
+                CARD_HEIGHT / static_cast<float>(it->second.getSize().y)
+            });
+            if (anim.isDiscard) sprite.setColor(sf::Color(255, 80, 80, alpha));
+            else sprite.setColor(sf::Color(255, 255, 255, alpha));
+            window.draw(sprite);
+        }
+    }
+
     // game over
     if (snapshot.gameOver && snapshot.winnerMessage.has_value()) {
         // dim the entire physical window (including letterbox bars) using the default view
@@ -224,6 +272,20 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
     }
 
     window.display();
+}
+
+void GameRenderer::startAnimation(const OpponentCardEvent& event, const GameSnapshot& snapshot) {
+    // NOTE: have to use oppHandSize + 1 because snapshot already reflects the decremented hand count
+    int preActionHandSize = std::max(1, snapshot.oppHandSize + 1);
+    int slotIndex = static_cast<int>(randombytes_uniform(static_cast<uint32_t>(preActionHandSize)));
+    auto startBounds = getOpponentCardBounds(slotIndex, preActionHandSize);
+
+    activeAnimation = CardAnimation {
+        .card = event.card,
+        .isDiscard = (event.type == OpponentCardEventType::DISCARD),
+        .startPos = startBounds.position,
+        .endPos = {LOGICAL_WIDTH / 2.f - CARD_WIDTH / 2.f, LOGICAL_HEIGHT / 2.f - CARD_HEIGHT / 2.f},
+    };
 }
 
 void GameRenderer::updateViewport(sf::Vector2u windowSize) {

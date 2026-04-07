@@ -30,11 +30,8 @@ void SpectralWail::resolve(Game& game, PlayerID controller) {
         if (!card.has_value()) throw std::runtime_error("[SpectralWail::resolve] Error: received decryption key failed to decrypt ciphertext\n");
 
         // Remove that card from the opponent's hand and add it to their graveyard
-        std::get<UnknownHand>(game.state.getPlayerData(opponent).hand).removeCard();
-        game.state.getPlayerData(opponent).graveyard.push_back(card.value());
-
+        game.discard(opponent, card.value());
         std::cout << std::format("  [Spectral Wail] Opponent discarded {} at random!\n", CardFactory::create(card.value())->getName());
-        game.verifier.logAction(Action::Discard(opponent, card.value()));
         return;
     }
     // If opponent is playing this card
@@ -64,11 +61,8 @@ void SpectralWail::resolve(Game& game, PlayerID controller) {
         game.network.sendScalar(encryptedHandContents[indexToDiscard].second.k_inv);
 
         // Remove that card from our hand and add it to our graveyard
-        hand.removeCard(handContents[indexToDiscard]);
-        game.state.getPlayerData(game.getLocalPlayer()).graveyard.push_back(handContents[indexToDiscard]);
-
+        game.discard(game.getLocalPlayer(), handContents[indexToDiscard]);
         std::cout << std::format("  [Spectral Wail] You discarded {} at random!\n", CardFactory::create(handContents[indexToDiscard])->getName());
-        game.verifier.logAction(Action::Discard(game.getLocalPlayer(), handContents[indexToDiscard]));
         return;
     }
 }

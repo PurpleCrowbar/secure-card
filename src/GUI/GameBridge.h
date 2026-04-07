@@ -7,6 +7,13 @@
 #include <atomic>
 #include "../Cards/CardID.h"
 
+enum class OpponentCardEventType : uint8_t { PLAY, DISCARD };
+
+struct OpponentCardEvent {
+    CardID card;
+    OpponentCardEventType type;
+};
+
 struct GameSnapshot {
     // local player
     int myHealth = 10;
@@ -25,6 +32,7 @@ struct GameSnapshot {
     bool gameOver = false;
     std::string statusMessage;
     std::optional<std::string> winnerMessage;
+    std::optional<OpponentCardEvent> oppCardEvent;
 };
 
 // This class's sole function is to bridge the gap between game logic and UI which run on separate threads

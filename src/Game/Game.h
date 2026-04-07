@@ -5,9 +5,7 @@
 #include "../Network.h"
 #include "../PlayerID.h"
 #include "../Verification/GameVerifier.h"
-
-class GameBridge;
-struct GameSnapshot;
+#include "../GUI/GameBridge.h"
 
 class Game {
 public:
@@ -57,10 +55,11 @@ private:
     void postGameExchangeAndVerify();
 
     // GUI helpers
-    GameSnapshot buildSnapshot(const std::string& statusMessage = "") const;
+    GameSnapshot buildSnapshot(const std::string& statusMessage = "");
     void publishSnapshot(const std::string& statusMessage = "");
 
     GameBridge* bridge = nullptr; // for multithreading
+    std::optional<OpponentCardEvent> pendingOppEvent;
     PlayerID localPlayer;
     // Local player's deck's contents from the start of the game. Sent post-game for verification
     const std::map<CardID, uint8_t> localDeckContents;

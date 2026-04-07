@@ -34,7 +34,9 @@ void GameBridge::publishState(const GameSnapshot& snapshot) {
  */
 GameSnapshot GameBridge::getSnapshot() {
     std::lock_guard lock(mutex);
-    return currentSnapshot;
+    GameSnapshot snap = currentSnapshot;
+    currentSnapshot.oppCardEvent.reset(); // consume event so it's only seen once
+    return snap;
 }
 
 /**

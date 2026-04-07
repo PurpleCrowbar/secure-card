@@ -1,8 +1,25 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <SFML/System/Clock.hpp>
 #include <map>
+#include <optional>
 #include "GameBridge.h"
 #include "../Cards/CardID.h"
+
+struct CardAnimation {
+    CardID card;
+    bool isDiscard;
+    sf::Vector2f startPos;
+    sf::Vector2f endPos;
+    float elapsed = 0.f;
+
+    static constexpr float SLIDE_DURATION = 0.5f;
+    static constexpr float HOLD_DURATION = 0.5f;
+    static constexpr float FADE_DURATION = 0.4f;
+
+    [[nodiscard]] float totalDuration() const { return SLIDE_DURATION + HOLD_DURATION + FADE_DURATION; }
+    [[nodiscard]] bool isComplete() const { return elapsed >= totalDuration(); }
+};
 
 enum class PlayerID : std::uint8_t;
 
@@ -34,6 +51,10 @@ private:
     sf::Texture cardbackTexture;
 
     GameSnapshot latestSnapshot;
+
+    std::optional<CardAnimation> activeAnimation;
+    sf::Clock frameClock;
+    void startAnimation(const OpponentCardEvent& event, const GameSnapshot& snapshot);
 
     void updateViewport(sf::Vector2u windowSize);
 
