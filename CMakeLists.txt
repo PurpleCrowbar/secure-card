@@ -24,12 +24,20 @@ file(GLOB_RECURSE SOURCES
 add_executable(secure_card ${SOURCES})
 
 target_include_directories(secure_card PRIVATE
-        ${sodium_SOURCE_DIR}/libsodium-win64/include
+    ${sodium_SOURCE_DIR}/libsodium-win64/include
 )
 
 add_library(sodium_lib STATIC IMPORTED)
 set_target_properties(sodium_lib PROPERTIES
-        IMPORTED_LOCATION ${sodium_SOURCE_DIR}/libsodium-win64/lib/libsodium.a
+    IMPORTED_LOCATION ${sodium_SOURCE_DIR}/libsodium-win64/lib/libsodium.a
 )
 
 target_link_libraries(secure_card PRIVATE sfml-graphics sfml-window sfml-network sfml-system sodium_lib)
+
+add_custom_command(
+    TARGET secure_card POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/resources"
+    "$<TARGET_FILE_DIR:secure_card>/resources"
+    COMMENT "Copying resources to build directory"
+)
