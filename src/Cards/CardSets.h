@@ -7,6 +7,7 @@ namespace CardSets {
     static const std::set ConstructedLegalCards {
         LIGHTNING_BOLT,
         DISORGANIZE,
-        SPECTRAL_WAIL
+        SPECTRAL_WAIL,
+        JETTISON
     };
 }

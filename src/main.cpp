@@ -36,6 +36,7 @@ int main(const int argc, char** argv) {
     selectedDeck[CardID::LIGHTNING_BOLT] = 5;
     selectedDeck[CardID::DISORGANIZE] = 5;
     selectedDeck[CardID::SPECTRAL_WAIL] = 5;
+    selectedDeck[CardID::JETTISON] = 5;
 
     GameBridge bridge;
     Game game(network, player, selectedDeck);
