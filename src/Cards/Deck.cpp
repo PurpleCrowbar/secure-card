@@ -1,4 +1,5 @@
 #include "Deck.h"
+#include <format>
 #include "../Cryptosystem.h"
 
 /**
@@ -74,9 +75,9 @@ bool Deck::addOpponentKey(uint8_t index, const Scalar& remoteKey) {
 /**
  * When called midgame, adds a card that both players know the value of (unencrypted). May also be called during
  * verification any time cards are added (as all cards are known).
- * @param id
- * @param index
- * @return
+ * @param id ID of card being added
+ * @param index Index of position in deck to add card
+ * @return False if index invalid; else true
  */
 bool Deck::addUnencryptedCard(CardID id, uint8_t index) {
     if (index >= contents.size()) [[unlikely]] return false;
@@ -135,14 +136,35 @@ std::optional<CardID> Deck::draw() {
     return card ? std::optional(cardId) : std::nullopt;
 }
 
+// TODO: This would *hugely* benefit from returning std::expected<std::vector<CardID>, DeckAccessError>
+/**
+ * Removes some number of cards from the top of the player's deck. <b>Returned value of this method must be
+ * added to the appropriate player's graveyard.</b> Throws if any card is unknown.
+ * @param count Number of cards to mill
+ * @return Vector of milled card IDs
+ */
+std::vector<CardID> Deck::mill(uint8_t count) {
+    uint8_t cardsToMill = std::min(static_cast<size_t>(count), contents.size());
+    std::vector<CardID> milledCards;
+    milledCards.reserve(cardsToMill);
+
+    for (int i = 0; i < cardsToMill; i++) {
+        auto card = std::get_if<CardID>(&contents[i].card);
+        if (!card) throw std::runtime_error("[Deck::mill] Attempted to mill unknown card. Ensure cards in range are known before milling.\n");
+        milledCards.push_back(*card);
+    }
+    // This is done outside the first loop so that the deck is not corrupted if card identification fails
+    for (int i = 0; i < cardsToMill; i++) removeCardAtIndex(0);
+    return milledCards;
+}
+
 // TODO: improve return type, function may return nullopt for reasons other than not knowing card ID (e.g., index out of bounds)
 /**
  * @param index Index of card to remove
- * @return Card ID of removed card if we knew it, else nullopt. Also nullopt if index out of bounds
+ * @return Card ID of removed card if we knew it, else nullopt
  */
 std::optional<CardID> Deck::removeCardAtIndex(uint8_t index) {
-    // TODO: This and other out of bounds access attempts should throw exception; it's always bugged behaviour
-    if (index >= contents.size()) [[unlikely]] return std::nullopt;
+    if (index >= contents.size()) [[unlikely]] throw std::runtime_error("[Deck::removeCardAtIndex]: Index out of bounds.\n");
 
     auto card = std::get_if<CardID>(&contents[index].card);
     CardID cardId;
@@ -154,7 +176,9 @@ std::optional<CardID> Deck::removeCardAtIndex(uint8_t index) {
     contents.erase(contents.begin() + index);
     if (!known) return std::nullopt;
     // If we knew the value of the card, remove it from our plaintext deck contents
-    plaintextContents.at(cardId)--;
+    // TODO: if plaintextContents contains card ID, decrement and erase, else don't worry about it.
+    // TODO: When it comes to adding new cards to the deck (additive mutation) and shuffling, ensure that number of plaintext contents == total cards
+    plaintextContents.at(cardId)--; // TODO: we don't know the plaintext contents of our opponent's deck. this won't work
     if (plaintextContents.at(cardId) == 0) plaintextContents.erase(cardId);
     return cardId;
 }
@@ -169,6 +193,14 @@ bool Deck::setKnownToOpponent(uint8_t index, bool known) {
     if (index >= contents.size()) [[unlikely]] return false;
     contents[index].knownToOpponent = known;
     return true;
+}
+
+void Deck::setKnownToOpponentAtIndices(const std::set<uint8_t> &indices) {
+    if (!indices.empty() && *indices.rbegin() >= contents.size()) throw std::runtime_error("[Deck::setKnownToOpponentAtIndices] Index out of bounds.\n");
+
+    for (auto index : indices) {
+        setKnownToOpponent(index);
+    }
 }
 
 /**
@@ -243,14 +275,60 @@ std::map<CardID, uint8_t> Deck::getContents() const {
     return plaintextContents;
 }
 
-// TODO: Need to update this to std::expected<bool, DeckQueryError>. Return value of false currently means two completely different things
 /**
  * @param index Index of card being checked
- * @return True if known to opponent, else false. Also returns false if index out of bounds
+ * @return True if known to opponent, else false
  */
 bool Deck::isKnownToOpponent(uint8_t index) const {
-    if (index >= contents.size()) [[unlikely]] return false;
+    if (index >= contents.size()) [[unlikely]]
+        throw std::runtime_error(std::format("[Deck::isKnownToOpponent] Index out of bounds.\n"));
     return contents[index].knownToOpponent;
+}
+
+/**
+ * Throws on index out of bounds or missing local key at index.
+ * @param indices Indices of cards to get corresponding local keys
+ * @return Vector of keys in the order of the given set of indices
+ */
+std::vector<Scalar> Deck::getLocalKeysAtIndices(const std::set<uint8_t>& indices) const {
+    if (!indices.empty() && *indices.rbegin() >= contents.size()) throw std::runtime_error("[Deck::getLocalKeysAtIndices] Index out of bounds.\n");
+
+    std::vector<Scalar> localKeys;
+    localKeys.reserve(indices.size());
+    for (auto index : indices) {
+        if (!contents[index].keys.first.has_value())
+            throw std::runtime_error(std::format("[Deck::getLocalKeysAtIndices] No local key at index {}.\n", index));
+        localKeys.push_back(contents[index].keys.first.value());
+    }
+    return localKeys;
+}
+
+/**
+ * @param indexRange Maximum index to check (defaults to unlimited range). Note: invalid (too high) index range = unlimited range
+ * @return Set of indices containing cards with unknown values
+ */
+std::set<uint8_t> Deck::getIndicesOfLocallyUnknown(std::optional<uint8_t> indexRange) const {
+    std::set<uint8_t> indices;
+    uint8_t maxIndex = indexRange.has_value() ? indexRange.value() : contents.size() - 1;
+    maxIndex = std::min(maxIndex, static_cast<uint8_t>(contents.size() - 1)); // guarantee index in bounds
+    for (int i = 0; i <= maxIndex; i++) {
+        if (std::holds_alternative<Point>(contents[i].card)) indices.insert(i);
+    }
+    return indices;
+}
+
+/**
+ * @param indexRange Maximum index to check (defaults to unlimited range). Note: invalid (too high) index range = unlimited range
+ * @return Set of indices containing cards with unknown values to the remote player
+ */
+std::set<uint8_t> Deck::getIndicesOfRemotelyUnknown(std::optional<uint8_t> indexRange) const {
+    std::set<uint8_t> indices;
+    uint8_t maxIndex = indexRange.has_value() ? indexRange.value() : contents.size() - 1;
+    maxIndex = std::min(maxIndex, static_cast<uint8_t>(contents.size() - 1)); // guarantee index in bounds
+    for (int i = 0; i <= maxIndex; i++) {
+        if (!contents[i].knownToOpponent) indices.insert(i);
+    }
+    return indices;
 }
 
 /**

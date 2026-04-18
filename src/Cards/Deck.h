@@ -26,8 +26,10 @@ public:
     // As above, but with the local player's Brainstorm/Donation effects
     bool addCardSolelyEncryptedLocally(CardID id, const Scalar& localKey, uint8_t index = 0);
     [[nodiscard]] std::optional<CardID> draw();
+    [[nodiscard]] std::vector<CardID> mill(uint8_t count);
     std::optional<CardID> removeCardAtIndex(uint8_t index);
     bool setKnownToOpponent(uint8_t index, bool known = true);
+    void setKnownToOpponentAtIndices(const std::set<uint8_t>& indices);
 
     // Getters
     [[nodiscard]] std::optional<CardID> getCardIDAtIndex(uint8_t index) const;
@@ -37,6 +39,9 @@ public:
     [[nodiscard]] std::set<uint8_t> getIndicesOfCardsSolelyEncryptedLocally() const;
     [[nodiscard]] std::map<CardID, uint8_t> getContents() const;
     [[nodiscard]] bool isKnownToOpponent(uint8_t index) const;
+    [[nodiscard]] std::vector<Scalar> getLocalKeysAtIndices(const std::set<uint8_t>& indices) const;
+    [[nodiscard]] std::set<uint8_t> getIndicesOfLocallyUnknown(std::optional<uint8_t> indexRange = std::nullopt) const;
+    [[nodiscard]] std::set<uint8_t> getIndicesOfRemotelyUnknown(std::optional<uint8_t> indexRange = std::nullopt) const;
 
     // Methods used during post-game verification
     void v_setPlaintextContents(const std::map<CardID, uint8_t>& newPlaintextContents);
