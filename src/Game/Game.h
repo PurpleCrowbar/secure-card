@@ -26,6 +26,7 @@ public:
     // Networked, shuffles a deck, both players call this with the same deckOwner argument
     void performShuffle(PlayerID deckOwner);
     void discard(PlayerID player, CardID card);
+    void mill(PlayerID millingPlayer, uint8_t count);
 
     // Getters
     [[nodiscard]] PlayerID getLocalPlayer() const { return localPlayer; }
@@ -58,8 +59,11 @@ private:
     GameSnapshot buildSnapshot(const std::string& statusMessage = "");
     void publishSnapshot(const std::string& statusMessage = "");
 
+    // Used for the GUI
     GameBridge* bridge = nullptr; // for multithreading
+    // TODO: could perhaps be a queue of events?
     std::optional<OpponentCardEvent> pendingOppEvent;
+
     PlayerID localPlayer;
     // Local player's deck's contents from the start of the game. Sent post-game for verification
     const std::map<CardID, uint8_t> localDeckContents;

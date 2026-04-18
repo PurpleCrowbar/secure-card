@@ -344,6 +344,59 @@ void Game::discard(PlayerID player, CardID card) {
 }
 
 /**
+ * Put cards from the top of a player's deck into their graveyard (a process known as "milling").
+ * @param millingPlayer Player milling
+ * @param count Number of cards to mill
+ */
+void Game::mill(PlayerID millingPlayer, uint8_t count) {
+    auto& playerData = state.getPlayerData(millingPlayer);
+    // count should never be 0, always incorrect behaviour. deck may be empty, however, in which case no mill occurs
+    if (count == 0 || playerData.deck.getSize() == 0) return;
+    uint8_t totalToMill = std::min(count, playerData.deck.getSize());
+
+    std::set<uint8_t> indicesOfLocallyUnknown = playerData.deck.getIndicesOfLocallyUnknown(totalToMill - 1);
+    std::set<uint8_t> indicesOfRemotelyUnknown = playerData.deck.getIndicesOfRemotelyUnknown(totalToMill - 1);
+
+    // TODO: using lambdas to de-duplicate code in local function scopes is excellent and should be used elsewhere (Game::drawCards?)
+    // lambda to receive keys and update the player's deck with those new keys
+    auto receiveKeys = [&] {
+        if (indicesOfLocallyUnknown.empty()) return;
+        std::vector<Scalar> receivedKeys = network.receiveScalars();
+        if (receivedKeys.size() != indicesOfLocallyUnknown.size())
+            throw std::runtime_error("[Game::mill] Received invalid number of keys.\n");
+        auto keyIt = receivedKeys.begin();
+        for (auto index : indicesOfLocallyUnknown) playerData.deck.addOpponentKey(index, *keyIt++);
+    };
+
+    // lambda to send keys for cards that the opponent doesn't know
+    auto sendKeys = [&] {
+        if (indicesOfRemotelyUnknown.empty()) return;
+        std::vector<Scalar> keysToSend = playerData.deck.getLocalKeysAtIndices(indicesOfRemotelyUnknown);
+        network.sendScalars(keysToSend);
+        playerData.deck.setKnownToOpponentAtIndices(indicesOfRemotelyUnknown);
+    };
+
+    if (millingPlayer == localPlayer) {
+        receiveKeys();
+        sendKeys();
+    } else {
+        sendKeys();
+        receiveKeys();
+    }
+
+    // mill from deck, add milled cards to yard, log mill action
+    std::vector<CardID> milledCards = playerData.deck.mill(totalToMill);
+    // TODO: C++23 has append_range which would compress this code: playerData.graveyard.append_range(playerData.deck.mill(totalToMill));
+    playerData.graveyard.insert(
+        playerData.graveyard.end(),
+        milledCards.begin(),
+        milledCards.end()
+    );
+    verifier.logAction(Action::Mill(millingPlayer, totalToMill));
+    std::cout << "  [Mill] " << (millingPlayer == localPlayer ? "You" : "Opponent") << " milled " << std::to_string(totalToMill) << " cards.\n";
+}
+
+/**
  * Both players call this at the same time (with the same arguments). The drawing player receives
  * some number of keys (count) for the top cards of their  deck, decrypts them, and adds them to their hand.
  * The opponent sends the keys and tracks the draws
