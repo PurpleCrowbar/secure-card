@@ -211,6 +211,17 @@ bool GameVerifier::run() {
                 return true;
             },
 
+            [&](const Action::Mill& a) -> bool {
+                auto& pd = state.getPlayerData(a.deckOwner);
+                auto milledCards = pd.deck.mill(a.amount);
+                pd.graveyard.insert(
+                    pd.graveyard.end(),
+                    milledCards.begin(),
+                    milledCards.end()
+                );
+                return true;
+            },
+
             [&](const Action::VerifyCommitment& a) -> bool {
                 if (currentCommitment >= enemyCommitments.size()) return false;
                 return enemyCommitments[currentCommitment++]->verify(state);
