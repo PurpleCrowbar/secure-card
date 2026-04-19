@@ -174,12 +174,25 @@ bool GameVerifier::run() {
             [&](const Action::DrawCards& a) -> bool {
                 auto& pd = state.getPlayerData(a.player);
                 for (uint8_t j = 0; j < a.count; ++j) {
+                    if (pd.deck.getSize() == 0) {
+                        // take fatigue damage for remaining draws, break out of for loop
+                        for (int draw = 0; draw < a.count - j; draw++) pd.currentHealth -= ++pd.fatigueCount;
+                        return true;
+                    }
                     auto& hand = std::get<ClearHand>(pd.hand);
-                    if (hand.isFull()) return false; // return false means discrepancy detected. so don't log draw action on full hand
-                    auto card = pd.deck.draw();
-                    // if deck empty, apply fatigue damage. else, add card to hand
-                    if (!card.has_value()) pd.currentHealth -= ++pd.fatigueCount;
-                    else hand.addCard(card.value());
+                    if (hand.isFull()) {
+                        // mill remaining cards
+                        uint8_t totalCardsToMill = std::min(pd.deck.getSize(), static_cast<uint8_t>(a.count - j));
+                        auto milledCards = pd.deck.mill(totalCardsToMill);
+                        pd.graveyard.insert(
+                            pd.graveyard.end(),
+                            milledCards.begin(),
+                            milledCards.end()
+                        );
+                        j += totalCardsToMill - 1;
+                        continue;
+                    }
+                    hand.addCard(pd.deck.draw().value());
                 }
                 return true;
             },

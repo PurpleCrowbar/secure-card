@@ -92,6 +92,7 @@ void Game::run() {
     while (!state.isGameOver().first) {
         if (!firstTurn) {
             startTurn();
+            if (state.isGameOver().first) break;
         }
         firstTurn = false;
 
@@ -421,113 +422,87 @@ void Game::drawCards(PlayerID player, uint8_t count) {
     bool localPlayerIsDrawing = (player == localPlayer);
     auto& drawingPlayerData = state.getPlayerData(player);
 
-    // check that there's enough cards to draw
-    uint8_t availableCardsToDraw = std::min(count, drawingPlayerData.deck.getSize());
+    // get indices of cards unknown to drawer (i.e., indices for which they'll need keys)
+    std::set<uint8_t> indicesDrawerDoesntKnow = localPlayerIsDrawing
+        ? drawingPlayerData.deck.getIndicesOfLocallyUnknown(std::min(count, drawingPlayerData.deck.getSize()) - 1)
+        : drawingPlayerData.deck.getIndicesOfRemotelyUnknown(std::min(count, drawingPlayerData.deck.getSize()) - 1);
 
     if (localPlayerIsDrawing) {
         // receive per-card keys from opponent for the top card(s)
         std::vector<Scalar> receivedKeys = network.receiveScalars();
-        uint8_t requiredKeyCount = 0;
-        for (int i = 0; i < availableCardsToDraw; i++) {
-            // we only need a remote key if we don't already know the card value
-            if (!drawingPlayerData.deck.getCardIDAtIndex(i).has_value()) requiredKeyCount++;
-        }
-        if (receivedKeys.size() != requiredKeyCount)
-            throw std::runtime_error("Received unexpected number of keys during draw");
+        if (receivedKeys.size() != indicesDrawerDoesntKnow.size())
+            throw std::runtime_error("[Game::drawCards] Received unexpected number of keys during draw");
 
         // Decrypt each relevant card
-        for (int i = 0; i < availableCardsToDraw; i++) {
-            // If we already know the value of this card, move onto the next one
-            if (drawingPlayerData.deck.getCardIDAtIndex(i).has_value()) continue;
-            if (!drawingPlayerData.deck.addOpponentKey(i, receivedKeys.front())) {
-                throw std::runtime_error("addOpponentKey failed for index " + std::to_string(i));
-            }
+        for (const auto index : indicesDrawerDoesntKnow) {
+            if (!drawingPlayerData.deck.addOpponentKey(index, receivedKeys.front()))
+                throw std::runtime_error("[Game::drawCards] addOpponentKey failed for index " + std::to_string(index));
             receivedKeys.erase(receivedKeys.begin());
         }
 
         // draw the now-decrypted cards from the top of the deck into our hand
         for (int i = 0; i < count; i++) {
-            // Deck empty, take fatigue damage
+            // Deck empty, take fatigue damage for remaining card draws
             if (drawingPlayerData.deck.getSize() == 0) {
                 std::cout << "  [Draw] Your deck is empty.\n";
-                drawingPlayerData.currentHealth -= ++drawingPlayerData.fatigueCount;
-                std::cout << "  [Fatigue] You took " << std::to_string(drawingPlayerData.fatigueCount) << " fatigue damage.\n";
-                continue;
+                uint8_t remainingDraws = count - i;
+                for (int drawIndex = 0; drawIndex < remainingDraws; drawIndex++) {
+                    drawingPlayerData.currentHealth -= ++drawingPlayerData.fatigueCount;
+                    std::cout << "  [Fatigue] You took " << std::to_string(drawingPlayerData.fatigueCount) << " fatigue damage.\n";
+                }
+                break;
             }
 
-            // Hand full, we need to mill card to graveyard
+            // Hand full but deck still contains cards; we need to mill cards to graveyard
             if (std::get<ClearHand>(drawingPlayerData.hand).isFull()) {
                 std::cout << "  [Draw] Your hand is full, so you failed to draw the card!\n";
-                // if opponent doesn't know the value of this card, send them the key
-                if (!drawingPlayerData.deck.isKnownToOpponent(0)) {
-                    network.sendScalar(drawingPlayerData.deck.getLocalKey(0).value()); // should be known (unless bug)
-                }
-                // then we both mill it
-                auto card = drawingPlayerData.deck.draw();
-                if (!card.has_value())
-                    throw std::runtime_error("[Draw] Drawn card ID not found in lookup table, meaning dud key received"); // (or bug)
-                drawingPlayerData.graveyard.push_back(card.value());
-                std::cout << "  [Overdraw] You milled " << CardFactory::create(card.value())->getName() << ".\n";
-
+                uint8_t totalCardsToMill = std::min(drawingPlayerData.deck.getSize(), static_cast<uint8_t>(count - i));
+                mill(player, totalCardsToMill, false);
+                i += totalCardsToMill - 1;
+                // have to continue as we may need to take fatigue. e.g., we draw 5 cards with only 3 in the deck. we
+                // need to mill the first 3 cards (what we do here), then take fatigue damage for the last 2 draws
                 continue;
             }
 
-            // hand not full & deck not empty: draw card
-            auto card = drawingPlayerData.deck.draw();
-            if (!card.has_value())
+            // Hand not full & deck not empty: draw card
+            auto drawnCard = drawingPlayerData.deck.draw();
+            if (!drawnCard.has_value())
                 throw std::runtime_error("[Draw] Drawn card ID not found in lookup table, meaning dud key received"); // (or bug)
-            std::get<ClearHand>(drawingPlayerData.hand).addCard(card.value());
-            std::cout << "  [Draw] Drew: " << CardFactory::create(card.value())->getName() << "\n";
+            std::get<ClearHand>(drawingPlayerData.hand).addCard(drawnCard.value());
+            std::cout << "  [Draw] Drew: " << CardFactory::create(drawnCard.value())->getName() << "\n";
         }
     }
     // opponent drawing card(s)
     else {
-        std::vector<Scalar> keysToSend; // our local keys that opponent needs for drawing (unless they already know the card value)
-        keysToSend.reserve(availableCardsToDraw);
-
-        for (int i = 0; i < availableCardsToDraw; i++) {
-            // if opponent already knows the value of the card, continue to next card
-            if (drawingPlayerData.deck.isKnownToOpponent(i)) continue;
-            std::optional<Scalar> localKey = drawingPlayerData.deck.getLocalKey(i);
-            if (!localKey.has_value()) {
-                // they don't know the card value... but we don't have the key? something has gone wrong here. exception
-                throw std::runtime_error("No local key available for card in opponent's deck at index " + std::to_string(i));
-            }
-            keysToSend.push_back(localKey.value());
-        }
-        network.sendScalars(keysToSend);
+        // send opponent our local keys for the cards they need to draw
+        network.sendScalars(drawingPlayerData.deck.getLocalKeysAtIndices(indicesDrawerDoesntKnow));
 
         // update our opponent's deck and hands (remove from deck, add to hand)
         for (int i = 0; i < count; i++) {
-            // Deck empty, take fatigue damage
+            // Deck empty, take fatigue damage for remaining card draws
             if (drawingPlayerData.deck.getSize() == 0) {
                 std::cout << "  [Draw] Opponent's deck is empty.\n";
-                drawingPlayerData.currentHealth -= ++drawingPlayerData.fatigueCount;
-                std::cout << "  [Fatigue] Opponent took " << std::to_string(drawingPlayerData.fatigueCount) << " fatigue damage.\n";
-                continue;
+                uint8_t remainingDraws = count - i;
+                for (int drawIndex = 0; drawIndex < remainingDraws; drawIndex++) {
+                    drawingPlayerData.currentHealth -= ++drawingPlayerData.fatigueCount;
+                    std::cout << "  [Fatigue] Opponent took " << std::to_string(drawingPlayerData.fatigueCount) << " fatigue damage.\n";
+                }
+                break;
             }
 
             // Hand full, we need to mill card to graveyard
             if (std::get<UnknownHand>(drawingPlayerData.hand).isFull()) {
                 std::cout << "  [Draw] Opponent's hand is full, so they failed to draw a card!\n";
-                // if we don't know the value of this card, get the remote key
-                if (!drawingPlayerData.deck.getCardIDAtIndex(0).has_value()) {
-                    drawingPlayerData.deck.addOpponentKey(0, network.receiveScalar());
-                }
-                // then we both mill it
-                auto card = drawingPlayerData.deck.draw();
-                if (!card.has_value())
-                    throw std::runtime_error("[Draw] Drawn card ID not found in lookup table, meaning dud key received"); // (or bug)
-                drawingPlayerData.graveyard.push_back(card.value());
-                std::cout << "  [Overdraw] Opponent milled " << CardFactory::create(card.value())->getName() << ".\n";
-
+                uint8_t totalCardsToMill = std::min(drawingPlayerData.deck.getSize(), static_cast<uint8_t>(count - i));
+                mill(player, totalCardsToMill, false);
+                i += totalCardsToMill - 1;
                 continue;
             }
 
-            // hand not full & deck not empty: draw card
-            auto card = drawingPlayerData.deck.draw();
+            // Hand not full & deck not empty: draw card
+            auto drawnCard = drawingPlayerData.deck.draw();
             std::get<UnknownHand>(drawingPlayerData.hand).addCard();
-            std::cout << "  [Draw] Opponent drew " << (card.has_value() ? CardFactory::create(card.value())->getName() : "a card") << ".\n";
+            std::cout << "  [Draw] Opponent drew " << (drawnCard.has_value() ? CardFactory::create(drawnCard.value())->getName() : "a card") << ".\n";
         }
     }
 
