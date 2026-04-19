@@ -351,8 +351,9 @@ void Game::discard(PlayerID player, CardID card) {
  * Put cards from the top of a player's deck into their graveyard (a process known as "milling").
  * @param millingPlayer Player milling
  * @param count Number of cards to mill
+ * @param logInVerifier Whether to log the action in the verifier. False when part of Game::draw resolution
  */
-void Game::mill(PlayerID millingPlayer, uint8_t count) {
+void Game::mill(PlayerID millingPlayer, uint8_t count, const bool logInVerifier) {
     auto& playerData = state.getPlayerData(millingPlayer);
     // count should never be 0, always incorrect behaviour. deck may be empty, however, in which case no mill occurs
     if (count == 0 || playerData.deck.getSize() == 0) return;
@@ -361,7 +362,6 @@ void Game::mill(PlayerID millingPlayer, uint8_t count) {
     std::set<uint8_t> indicesOfLocallyUnknown = playerData.deck.getIndicesOfLocallyUnknown(totalToMill - 1);
     std::set<uint8_t> indicesOfRemotelyUnknown = playerData.deck.getIndicesOfRemotelyUnknown(totalToMill - 1);
 
-    // TODO: using lambdas to de-duplicate code in local function scopes is excellent and should be used elsewhere (Game::drawCards?)
     // lambda to receive keys and update the player's deck with those new keys
     auto receiveKeys = [&] {
         if (indicesOfLocallyUnknown.empty()) return;
@@ -396,8 +396,18 @@ void Game::mill(PlayerID millingPlayer, uint8_t count) {
         milledCards.begin(),
         milledCards.end()
     );
-    verifier.logAction(Action::Mill(millingPlayer, totalToMill));
-    std::cout << "  [Mill] " << (millingPlayer == localPlayer ? "You" : "Opponent") << " milled " << std::to_string(totalToMill) << " cards.\n";
+    if (milledCards.size() > 1) {
+        std::cout << "  [Mill] " << (millingPlayer == localPlayer ? "You" : "Opponent") << " milled " << std::to_string(totalToMill) << " cards:\n  ";
+        std::string cardsMilledString;
+        for (const auto card : milledCards) cardsMilledString += (CardFactory::create(card)->getName() + ", ");
+        cardsMilledString.replace(cardsMilledString.size() - 2, 2, "\n");
+        std::cout << cardsMilledString;
+    }
+    else {
+        std::cout << "  [Mill] " << (millingPlayer == localPlayer ? "You" : "Opponent") << " milled "
+            << CardFactory::create(milledCards[0])->getName() << "\n";
+    }
+    if (logInVerifier) verifier.logAction(Action::Mill(millingPlayer, totalToMill));
 }
 
 /**

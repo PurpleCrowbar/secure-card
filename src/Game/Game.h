@@ -26,7 +26,7 @@ public:
     // Networked, shuffles a deck, both players call this with the same deckOwner argument
     void performShuffle(PlayerID deckOwner);
     void discard(PlayerID player, CardID card);
-    void mill(PlayerID millingPlayer, uint8_t count);
+    void mill(PlayerID millingPlayer, uint8_t count, bool logInVerifier = true);
 
     // Getters
     [[nodiscard]] PlayerID getLocalPlayer() const { return localPlayer; }
