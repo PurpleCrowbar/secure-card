@@ -319,6 +319,7 @@ std::vector<Scalar> Deck::getLocalKeysAtIndices(const std::set<uint8_t>& indices
  * @return Set of indices containing cards with unknown values
  */
 std::set<uint8_t> Deck::getIndicesOfLocallyUnknown(std::optional<uint8_t> indexRange) const {
+    if (contents.empty()) return {};
     std::set<uint8_t> indices;
     uint8_t maxIndex = indexRange.has_value() ? indexRange.value() : contents.size() - 1;
     maxIndex = std::min(maxIndex, static_cast<uint8_t>(contents.size() - 1)); // guarantee index in bounds
@@ -333,6 +334,7 @@ std::set<uint8_t> Deck::getIndicesOfLocallyUnknown(std::optional<uint8_t> indexR
  * @return Set of indices containing cards with unknown values to the remote player
  */
 std::set<uint8_t> Deck::getIndicesOfRemotelyUnknown(std::optional<uint8_t> indexRange) const {
+    if (contents.empty()) return {};
     std::set<uint8_t> indices;
     uint8_t maxIndex = indexRange.has_value() ? indexRange.value() : contents.size() - 1;
     maxIndex = std::min(maxIndex, static_cast<uint8_t>(contents.size() - 1)); // guarantee index in bounds
