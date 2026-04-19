@@ -34,6 +34,7 @@ public:
     void setLocalDeckCommitmentKey(const DeckHashKey& key);
     void setRemoteDeckCommitment(const DeckHash& hash);
     [[nodiscard]] const DeckHashKey& getLocalDeckCommitmentKey() const;
+    [[nodiscard]] bool validateRemoteDeckContents(const std::map<CardID, uint8_t>& remoteDeckContents) const;
     [[nodiscard]] bool verifyRemoteDeckContents(const DeckHashKey& remoteKey, const std::map<CardID, uint8_t>& remoteDeckContents) const;
 
     // Shuffle seeds

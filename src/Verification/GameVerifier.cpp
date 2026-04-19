@@ -1,5 +1,7 @@
 #include "GameVerifier.h"
 #include <iostream>
+#include "../Cards/CardFactory.h"
+#include "../Cards/CardSets.h"
 
 GameVerifier::GameVerifier(const std::map<CardID, uint8_t>& localDeckContents, PlayerID localPlayer)
     : state(localDeckContents, localPlayer), localPlayer(localPlayer) {
@@ -45,6 +47,19 @@ void GameVerifier::setRemoteDeckCommitment(const DeckHash& hash) {
 
 const DeckHashKey& GameVerifier::getLocalDeckCommitmentKey() const {
     return localDeckCommitmentKey;
+}
+
+/**
+ * Checks that the deck an opponent started the game with was illegal; specifically, checks that they only ran legal
+ * cards in their deck, and that the quantities of each card in the deck were also legal.
+ * @param remoteDeckContents Deck contents revealed by opponent at game end
+ * @return True if deck contains no illegal cards and no illegal quantities of cards, else false
+ */
+bool GameVerifier::validateRemoteDeckContents(const std::map<CardID, uint8_t>& remoteDeckContents) const {
+    for (const auto [id, quantity] : remoteDeckContents) {
+        if (!CardSets::ConstructedLegalCards.contains(id) || quantity > CardFactory::create(id)->getMaxCopies()) return false;
+    }
+    return true;
 }
 
 /**
