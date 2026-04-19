@@ -69,6 +69,15 @@ void Game::run() {
     publishSnapshot("Exchanging deck commitments...");
     exchangeDeckCommitments();
 
+    // Coin flip deciding who goes first. In its own mini scope to clean up temporary stack variable
+    std::cout << "\n=== Turn order coin toss ===\n";
+    {
+        auto playerGoingFirst = static_cast<PlayerID>(flipCoin());
+        state.activePlayer = playerGoingFirst;
+        verifier.setPlayerGoingFirst(playerGoingFirst);
+        std::cout << "  [Coin Toss] " << (playerGoingFirst == localPlayer ? "You go" : "Opponent goes") << " first!\n";
+    }
+
     std::cout << "\n=== Shuffling decks ===\n";
     publishSnapshot("Shuffling decks...");
     performShuffle(PlayerID::ONE);
@@ -79,9 +88,6 @@ void Game::run() {
     drawCards(PlayerID::ONE, 4);
     drawCards(PlayerID::TWO, 4);
 
-    // TODO: coin flip here determines who goes first
-    state.activePlayer = PlayerID::ONE;
-    verifier.setPlayerGoingFirst(state.activePlayer.value());
     std::cout << "\n=== Game starting! ===\n";
     publishSnapshot();
 
@@ -415,6 +421,69 @@ void Game::mill(PlayerID millingPlayer, uint8_t count, const bool logInVerifier)
             << CardFactory::create(milledCards[0])->getName() << "\n";
     }
     if (logInVerifier) verifier.logAction(Action::Mill(millingPlayer, totalToMill));
+}
+
+/**
+ * Networked function that simulates a coin flip between the two players. Implementation is a standard Blum coin flip.
+ * Alice sends Bob a commitment of the bit she chose. Bob then sends her his bit. She then reveals her initial bit.
+ * The result of the coin toss is Alice's bit XOR Bob's bit.
+ * @return True if heads, false if tails
+ */
+bool Game::flipCoin() const {
+    // Not to be confused with verification phase commitments. This is just for the 32-byte hash of our random bit
+    using Commitment = std::array<uint8_t, crypto_generichash_BYTES>;
+    using CoinNonce = std::array<uint8_t, 32>;
+
+    // Lambda used here to save on repeating the exact same code in two separate places. This function uses
+    // libsodium's streaming hash capabilities, so building a hash from a stream of data (nonce & bit in our case)
+    auto computeCommitment = [](const CoinNonce& nonce, uint8_t bit) {
+        Commitment commBuffer;
+        crypto_generichash_state hashState;
+        // intialise state without a key - we use the nonce to hide the underlying val
+        crypto_generichash_init(&hashState, nullptr, 0, commBuffer.size());
+        // feed 32 byte nonce into hash
+        crypto_generichash_update(&hashState, nonce.data(), nonce.size());
+        // append the bit byte (7 bits unused) to the stream
+        crypto_generichash_update(&hashState, &bit, sizeof(bit));
+        // finally output 32 byte commitment
+        crypto_generichash_final(&hashState, commBuffer.data(), commBuffer.size());
+        return commBuffer;
+    };
+
+    // generate a random bit (2 = excluded upper bound, so val of either 0 or 1)
+    const uint8_t localBit = static_cast<uint8_t>(randombytes_uniform(2));
+    uint8_t remoteBit;
+
+    if (localPlayer == PlayerID::ONE) {
+        CoinNonce myNonce;
+        randombytes_buf(myNonce.data(), myNonce.size()); // generate some random 32-byte nonce
+        // generate a commitment (Blake2b hash) of the bit and nonce
+        const Commitment myCommitment = computeCommitment(myNonce, localBit);
+
+        // Player One commits their bit to Player Two, receives Player Two's bit, then reveals their own nonce & bit
+        network.sendAll(myCommitment.data(), myCommitment.size()); // send commitment
+        remoteBit = network.receiveUint8(); // receive Player Two's bit
+        network.sendAll(myNonce.data(), myNonce.size()); // send our nonce
+        network.sendUint8(localBit); // send our bit
+    } else {
+        // Receive commitment, then send our bit, then receive and verify reveal
+        Commitment theirCommitment;
+        network.receiveAll(theirCommitment.data(), theirCommitment.size()); // receive commitment
+        network.sendUint8(localBit); // send our bit
+
+        CoinNonce theirNonce;
+        network.receiveAll(theirNonce.data(), theirNonce.size()); // receive their nonce
+        remoteBit = network.receiveUint8(); // receive their bit
+        if (remoteBit > 1) throw std::runtime_error("[Game::flipCoin] Opponent sent more than one bit of data");
+
+        const Commitment expected = computeCommitment(theirNonce, remoteBit);
+        if (sodium_memcmp(theirCommitment.data(), expected.data(), expected.size()) != 0) {
+            throw std::runtime_error("[Game::flipCoin] Opponent's commitment does not match their reveal");
+        }
+    }
+
+    if (remoteBit > 1) throw std::runtime_error("[Game::flipCoin] Opponent sent more than one bit of data");
+    return (localBit ^ remoteBit);
 }
 
 /**

@@ -18,7 +18,6 @@ constexpr std::size_t SCALAR_BYTES = crypto_core_ristretto255_SCALARBYTES;      
 constexpr std::size_t POINT_BYTES = crypto_core_ristretto255_BYTES;             // 32
 constexpr std::size_t HASH_INPUT_BYTES = crypto_core_ristretto255_HASHBYTES;    // 64
 
-// TODO: rename Scalar and Point to Key and CardPoint respectively?
 using Scalar = std::array<unsigned char, SCALAR_BYTES>;
 using Point = std::array<unsigned char, POINT_BYTES>;
 using Nonce = uint8_t;
