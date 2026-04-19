@@ -24,7 +24,7 @@ public:
 
     // Individual player data. The GameState possesses a PlayerData for each of the two players
     struct PlayerData {
-        PlayerData(bool isLocalPlayer) : hand(isLocalPlayer
+        explicit PlayerData(bool isLocalPlayer) : hand(isLocalPlayer
                 ? std::variant<ClearHand, UnknownHand>(ClearHand{})
                 : std::variant<ClearHand, UnknownHand>(UnknownHand{})
             ) {}
@@ -79,9 +79,7 @@ public:
         auto data = playerData[static_cast<std::underlying_type_t<PlayerID>>(player)];
         if (const auto hand = std::get_if<ClearHand>(&data.hand)) return hand->getSize();
         if (const auto hand = std::get_if<UnknownHand>(&data.hand)) return hand->getSize();
-
-        // This never returns; data.hand is always either a ClearHand or an UnknownHand.
-        return 0;
+        throw std::logic_error("[GameState::getHandSize] Hand was not of ClearHand or UnknownHand type\n");
     }
 
     [[nodiscard]] size_t getOpponentHandSize(PlayerID player) const {
