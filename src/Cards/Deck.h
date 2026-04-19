@@ -11,7 +11,7 @@ class Deck {
 public:
     // Constructor for empty deck
     Deck();
-    [[deprecated("No currently known usage")]] explicit Deck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
+    [[deprecated("No known usage")]] explicit Deck(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
     // Constructor for a vector of plaintext card IDs (plaintext deck)
     explicit Deck(const std::map<CardID, uint8_t>& plaintextDeckContents);
     void setEncryptedContents(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
@@ -30,6 +30,7 @@ public:
     std::optional<CardID> removeCardAtIndex(uint8_t index);
     bool setKnownToOpponent(uint8_t index, bool known = true);
     void setKnownToOpponentAtIndices(const std::set<uint8_t>& indices);
+    void disableContentsTracking();
 
     // Getters
     [[nodiscard]] std::optional<CardID> getCardIDAtIndex(uint8_t index) const;
@@ -45,7 +46,7 @@ public:
 
     // Methods used during post-game verification
     void v_setPlaintextContents(const std::map<CardID, uint8_t>& newPlaintextContents);
-    bool v_shuffleWithSeeds(ShuffleSeed ownerSeed, ShuffleSeed enemySeed);
+    void v_shuffleWithSeeds(ShuffleSeed ownerSeed, ShuffleSeed enemySeed);
 
 private:
     struct CardEntry {
@@ -60,10 +61,10 @@ private:
     std::vector<CardEntry> contents;
     /**
      * key = card ID, val = quantity present. Tracks deck contents irrespective of order.
-     * For example, if contents = {BOLT, ELIXIR, BOLT} (encrypted), plaintextContents = { {BOLT, 2}, {ELIXIR, 1} }
-     * This is exclusively used for tracking the local player's deck contents for shuffling and similar actions.
-     * Accordingly, it should be left untouched for the remote deck.
+     * For example, if contents = {BOLT, ELIXIR, BOLT} (encrypted), then plaintextContents = { {BOLT, 2}, {ELIXIR, 1} }.
+     * This is used for tracking the local player's deck contents for shuffling and similar actions, and is used for
+     * both players' decks during verification. Accordingly, it should be std::nullopt for the remote deck at gametime.
      */
-    std::map<CardID, uint8_t> plaintextContents;
+    std::optional<std::map<CardID, uint8_t>> plaintextContents {std::in_place};
     const LookupTable& lookupTable;
 };

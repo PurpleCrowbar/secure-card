@@ -25,9 +25,9 @@ Deck::Deck(const std::map<CardID, uint8_t>& plaintextDeckContents) : lookupTable
     if (plaintextDeckContents.empty()) throw std::invalid_argument("[Deck] plaintextDeck passed to constructor is empty");
 
     std::vector<CardID> cards;
-    for (const auto& [id, quantity] : plaintextDeckContents) {
+    for (const auto [id, quantity] : plaintextDeckContents) {
         for (uint8_t i = 0; i < quantity; ++i) {
-            plaintextContents[id]++;
+            plaintextContents.value()[id]++;
             // TODO: Is this even necessary? Is the contents vector ever accessed before setEncryptedContents is called?
             contents.push_back({id, { std::nullopt, std::nullopt }});
         }
@@ -65,7 +65,7 @@ bool Deck::addOpponentKey(uint8_t index, const Scalar& remoteKey) {
         card = lookupTable.getCardID(
             decrypt(std::get<Point>(contents[index].card), remoteKey)
         );
-        plaintextContents[card.value()]++;
+        if (plaintextContents.has_value()) plaintextContents.value()[card.value()]++;
     }
     if (!card.has_value()) return false;
     contents[index].card = card.value();
@@ -83,7 +83,7 @@ bool Deck::addUnencryptedCard(CardID id, uint8_t index) {
     if (index >= contents.size()) [[unlikely]] return false;
 
     contents.insert(contents.begin() + index, {id, { std::nullopt, std::nullopt }, true});
-    plaintextContents[id]++;
+    if (plaintextContents.has_value()) plaintextContents.value()[id]++;
     return true;
 }
 
@@ -129,8 +129,11 @@ std::optional<CardID> Deck::draw() {
     CardID cardId;
     if (card) {
         cardId = *card;
-        plaintextContents.at(cardId)--;
-        if (plaintextContents.at(cardId) == 0) plaintextContents.erase(cardId);
+        if (plaintextContents.has_value()) {
+            auto& ptc = plaintextContents.value();
+            ptc.at(cardId)--;
+            if (ptc.at(cardId) == 0) ptc.erase(cardId);
+        }
     }
     contents.erase(contents.begin());
     return card ? std::optional(cardId) : std::nullopt;
@@ -150,7 +153,7 @@ std::vector<CardID> Deck::mill(uint8_t count) {
 
     for (int i = 0; i < cardsToMill; i++) {
         auto card = std::get_if<CardID>(&contents[i].card);
-        if (!card) throw std::runtime_error("[Deck::mill] Attempted to mill unknown card. Ensure cards in range are known before milling.\n");
+        if (!card) throw std::runtime_error("[Deck::mill] Attempted to mill unknown card. Ensure cards in range are known before milling\n");
         milledCards.push_back(*card);
     }
     // This is done outside the first loop so that the deck is not corrupted if card identification fails
@@ -158,28 +161,27 @@ std::vector<CardID> Deck::mill(uint8_t count) {
     return milledCards;
 }
 
-// TODO: improve return type, function may return nullopt for reasons other than not knowing card ID (e.g., index out of bounds)
 /**
  * @param index Index of card to remove
  * @return Card ID of removed card if we knew it, else nullopt
  */
 std::optional<CardID> Deck::removeCardAtIndex(uint8_t index) {
-    if (index >= contents.size()) [[unlikely]] throw std::runtime_error("[Deck::removeCardAtIndex]: Index out of bounds.\n");
+    if (index >= contents.size()) [[unlikely]] throw std::runtime_error("[Deck::removeCardAtIndex]: Index out of bounds\n");
 
     auto card = std::get_if<CardID>(&contents[index].card);
     CardID cardId;
-    bool known = false;
-    if (card) {
-        cardId = *card;
-        known = true;
-    }
+    if (card) cardId = *card;
     contents.erase(contents.begin() + index);
-    if (!known) return std::nullopt;
-    // If we knew the value of the card, remove it from our plaintext deck contents
-    // TODO: if plaintextContents contains card ID, decrement and erase, else don't worry about it.
-    // TODO: When it comes to adding new cards to the deck (additive mutation) and shuffling, ensure that number of plaintext contents == total cards
-    plaintextContents.at(cardId)--; // TODO: we don't know the plaintext contents of our opponent's deck. this won't work
-    if (plaintextContents.at(cardId) == 0) plaintextContents.erase(cardId);
+    // This code is currently never called as this function is only called within the context of milling, wherein the
+    // values of the cards must be known. Even after erasing the value in the vector, `card` remains a non-null pointer;
+    // it is simply a **dangling pointer** that must not be accessed but that can still be checked as null.
+    if (card == nullptr) return std::nullopt;
+    // If we knew the value of the card, remove it from our plaintext deck contents (if we're tracking it)
+    if (plaintextContents.has_value()) {
+        auto& ptc = plaintextContents.value();
+        if (--ptc.at(cardId) == 0) ptc.erase(cardId);
+    }
+
     return cardId;
 }
 
@@ -196,11 +198,19 @@ bool Deck::setKnownToOpponent(uint8_t index, bool known) {
 }
 
 void Deck::setKnownToOpponentAtIndices(const std::set<uint8_t> &indices) {
-    if (!indices.empty() && *indices.rbegin() >= contents.size()) throw std::runtime_error("[Deck::setKnownToOpponentAtIndices] Index out of bounds.\n");
+    if (!indices.empty() && *indices.rbegin() >= contents.size()) throw std::runtime_error("[Deck::setKnownToOpponentAtIndices] Index out of bounds\n");
 
     for (auto index : indices) {
         setKnownToOpponent(index);
     }
+}
+
+/**
+ * Disables tracking the deck's contents in the <code>plaintextContents</code> map. Must be called for the remote
+ * player's deck during gametime, but not during verification.
+ */
+void Deck::disableContentsTracking() {
+    plaintextContents = std::nullopt;
 }
 
 /**
@@ -272,7 +282,8 @@ std::set<uint8_t> Deck::getIndicesOfCardsSolelyEncryptedLocally() const {
  * @return The known plaintext contents of the deck. Key = card ID, value = quantity present
  */
 std::map<CardID, uint8_t> Deck::getContents() const {
-    return plaintextContents;
+    if (!plaintextContents.has_value()) [[unlikely]] throw std::logic_error("[Deck::getContents] Called on deck that isn't tracking contents\n");
+    return plaintextContents.value();
 }
 
 /**
@@ -345,14 +356,16 @@ void Deck::v_setPlaintextContents(const std::map<CardID, uint8_t>& newPlaintextC
  * shuffle seeds used during gameplay.
  * @param ownerSeed Shuffle seed used by this deck's owner
  * @param enemySeed Shuffle seed used by the enemy of this deck's owner
- * @return True if successful, false if plaintextContents empty
  */
-bool Deck::v_shuffleWithSeeds(ShuffleSeed ownerSeed, ShuffleSeed enemySeed) {
-    if (plaintextContents.empty()) return false;
+void Deck::v_shuffleWithSeeds(ShuffleSeed ownerSeed, ShuffleSeed enemySeed) {
+    if (!plaintextContents.has_value()) throw std::logic_error(
+        "[Deck::v_shuffleWithSeeds] Deck not tracking contents during verification\n"
+    );
+    if (plaintextContents.value().empty()) return;
 
     std::vector<CardID> cards;
-    for (const auto& [id, quantity] : plaintextContents) {
-        for (uint8_t i = 0; i < quantity; ++i) {
+    for (const auto [id, quantity] : plaintextContents.value()) {
+        for (uint8_t i = 0; i < quantity; i++) {
             cards.push_back(id);
         }
     }
@@ -364,5 +377,4 @@ bool Deck::v_shuffleWithSeeds(ShuffleSeed ownerSeed, ShuffleSeed enemySeed) {
     for (const auto& cardID : cards) {
         contents.push_back({cardID, { std::nullopt, std::nullopt }});
     }
-    return true;
 }

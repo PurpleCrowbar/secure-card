@@ -8,7 +8,11 @@
 Game::Game(Network& network, PlayerID localPlayer, const std::map<CardID, uint8_t>& localDeckContents)
     : network(network), verifier(localDeckContents, localPlayer),
     state(localDeckContents, localPlayer), localPlayer(localPlayer),
-    localDeckContents(localDeckContents) {}
+    localDeckContents(localDeckContents)
+{
+    // disable tracking of opponent's deck
+    state.getOpponentPlayerData(localPlayer).deck.disableContentsTracking();
+}
 
 /**
  * Generates a GameSnapshot (basically a container of important game info) from the data in the gamestate. Used for GUI.
