@@ -20,7 +20,7 @@ private:
     LookupTable();
     bool tryLoadFromFile();
     void generateTable();
-    void saveToFile() const;
+    bool saveToFile() const;
 
     struct PointHash {
         std::size_t operator()(const Point& p) const {

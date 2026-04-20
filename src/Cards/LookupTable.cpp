@@ -14,8 +14,8 @@ LookupTable::LookupTable() {
     }
     std::cout << "Generating lookup table...\n";
     generateTable();
-    saveToFile();
-    std::cout << "Lookup table generated and saved.\n";
+    if (saveToFile()) std::cout << "Lookup table generated and saved to disc.\n";
+    else std::cout << "Lookup table generated, but not saved to disc.\n";
 }
 
 /**
@@ -81,10 +81,12 @@ void LookupTable::generateTable() {
     }
 }
 
-// TODO: Program should continue to operate even when serialisation impossible (e.g., because in read-only directory)
-void LookupTable::saveToFile() const {
+bool LookupTable::saveToFile() const {
     std::ofstream file(LOOKUP_TABLE_FILE, std::ios::binary);
-    if (!file) throw std::runtime_error("Failed to open lookup table file for writing.");
+    if (!file) {
+        std::cerr << "Warning: couldn't create/open lookup table file for writing.\n";
+        return false;
+    }
 
     // write the header constants to the file
     const uint16_t schemaVersion = Constants::SCHEMA_VERSION;
@@ -103,7 +105,12 @@ void LookupTable::saveToFile() const {
         }
     }
 
-    if (!file) throw std::runtime_error("Failed to write lookup table to disk.");
+    if (!file) {
+        std::cerr << "Warning: failed to serialise lookup table to disc.\n";
+        return false;
+    }
+
+    return true;
 }
 
 /**
