@@ -39,6 +39,13 @@ elseif (MSVC)
     set_property(TARGET secure_card PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
+if (WIN32)
+    file(GENERATE
+        OUTPUT "$<TARGET_FILE_DIR:secure_card>/start_game.cmd"
+        CONTENT "start secure_card.exe host\nstart secure_card.exe client\n"
+    )
+endif()
+
 add_custom_command(
     TARGET secure_card POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
