@@ -14,8 +14,7 @@ public:
     [[nodiscard]] virtual int getManaCost() const = 0;
     [[nodiscard]] virtual std::string getName() const = 0;
     [[nodiscard]] virtual std::string getRulesText() const = 0;
-    // TODO: make this a lower number (e.g., 3) when there are more cards in the game
-    [[nodiscard]] virtual uint8_t getMaxCopies() const { return 30; };
+    [[nodiscard]] virtual uint8_t getMaxCopies() const { return 5; };
 
 protected:
     CardID id;
