@@ -31,7 +31,7 @@ int main(const int argc, char** argv) {
     if (isHost) network.host(PORT);
     else network.connect("127.0.0.1", PORT);
 
-    // TODO: Implement DeckSelector which allows player to get deck from some menu
+    // TODO: Implement DeckSelector which allows player to get deck from some menu. Irrelevant to honours project
     std::map<CardID, uint8_t> selectedDeck;
     selectedDeck[CardID::LIGHTNING_BOLT] = 5;
     selectedDeck[CardID::DISORGANIZE] = 5;
