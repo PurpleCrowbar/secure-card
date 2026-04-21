@@ -6,6 +6,8 @@
 #include "../../Commitments/CardsInHandCommitment.h"
 
 void SpectralWail::resolve(Game& game, PlayerID controller) {
+    if (game.state.getOpponentHandSize(controller) == 0) return;
+
     // If local player is playing this card
     if (game.getLocalPlayer() == controller) {
         PlayerID opponent = PlayerIDUtils::getOpponent(controller);
