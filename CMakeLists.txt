@@ -33,11 +33,7 @@ set_target_properties(sodium_lib PROPERTIES
 )
 
 target_link_libraries(secure_card PRIVATE sfml-graphics sfml-window sfml-network sfml-system sodium_lib)
-if (MINGW)
-    target_link_options(secure_card PRIVATE -static-libgcc -static-libstdc++ -static)
-elseif (MSVC)
-    set_property(TARGET secure_card PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
+target_link_options(secure_card PRIVATE -static-libgcc -static-libstdc++ -static)
 
 if (WIN32)
     file(GENERATE
