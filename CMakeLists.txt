@@ -23,23 +23,11 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
 )
 add_executable(secure_card ${SOURCES})
 
-target_include_directories(secure_card PRIVATE
-    ${sodium_SOURCE_DIR}/libsodium-win64/include
-)
+target_link_libraries(secure_card PRIVATE SFML::Graphics SFML::Window SFML::Network SFML::System PkgConfig::sodium)
 
-add_library(sodium_lib STATIC IMPORTED)
-set_target_properties(sodium_lib PROPERTIES
-    IMPORTED_LOCATION ${sodium_SOURCE_DIR}/libsodium-win64/lib/libsodium.a
-)
-
-target_link_libraries(secure_card PRIVATE sfml-graphics sfml-window sfml-network sfml-system sodium_lib)
-target_link_options(secure_card PRIVATE -static-libgcc -static-libstdc++ -static)
-
-if (WIN32)
-    file(GENERATE
-        OUTPUT "$<TARGET_FILE_DIR:secure_card>/start_game.cmd"
-        CONTENT "start secure_card.exe host\nstart secure_card.exe client\n"
-    )
+# Only statically link runtime if building with MinGW
+if (MINGW)
+    target_link_options(secure_card PRIVATE -static-libgcc -static-libstdc++ -static)
 endif()
 
 add_custom_command(
@@ -49,3 +37,16 @@ add_custom_command(
     "$<TARGET_FILE_DIR:secure_card>/resources"
     COMMENT "Copying resources to build directory"
 )
+
+if (WIN32)
+    file(GENERATE
+        OUTPUT "$<TARGET_FILE_DIR:secure_card>/start_game.cmd"
+        CONTENT "start secure_card.exe host\nstart secure_card.exe client\n"
+    )
+else()
+    file(GENERATE
+        OUTPUT "$<TARGET_FILE_DIR:secure_card>/start_game.sh"
+        CONTENT "#!/bin/sh\n./secure_card host &\n./secure_card client &\nwait\n"
+        FILE PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+    )
+endif()
