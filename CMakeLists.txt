@@ -47,6 +47,6 @@ else()
     file(GENERATE
         OUTPUT "$<TARGET_FILE_DIR:secure_card>/start_game.sh"
         CONTENT "#!/bin/sh\n./secure_card host &\n./secure_card client &\nwait\n"
-        FILE PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+        FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
     )
 endif()
