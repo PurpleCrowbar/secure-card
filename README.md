@@ -2,24 +2,53 @@
 
 A 1v1, direct peer-to-peer trading card game implementation. Utilises mental poker protocols and commitment schemes to prevent or detect all possible forms of cheating.
 
-**This project is currently only officially compatible with Windows 10/11.**
-
 ## Prerequisites
 
-[MSYS2](https://www.msys2.org) with the following `pacman` packages installed in the MinGW64 environment:
- 
-- GCC: `mingw-w64-x86_64-gcc`
-- CMake: `mingw-w64-x86_64-cmake`
-- Ninja: `mingw-w64-x86_64-ninja`
-- Git: `git`
+### Windows
 
-Dependencies ([SFML](https://github.com/sfml/sfml), [libsodium](https://github.com/jedisct1/libsodium)) are fetched automatically on first build.
+Install [MSYS2](https://www.msys2.org), then run the following command from the MSYS2 MinGW64 shell:
 
-**MSVC is not supported for this project.**
+```bash
+pacman -S --needed \
+    mingw-w64-x86_64-gcc \
+    mingw-w64-x86_64-cmake \
+    mingw-w64-x86_64-ninja \
+    mingw-w64-x86_64-pkgconf \
+    mingw-w64-x86_64-libsodium \
+    git
+```
 
-## Installation
+MSVC is not supported.
 
-Open the MSYS2 MinGW64 shell, navigate to the project's root, and run the following:
+### Debian / Ubuntu
+
+```bash
+sudo apt update
+sudo apt install \
+    build-essential \
+    cmake \
+    ninja-build \
+    git \
+    pkg-config \
+    libsodium-dev \
+    libxrandr-dev \
+    libxcursor-dev \
+    libxi-dev \
+    libudev-dev \
+    libfreetype-dev \
+    libflac-dev \
+    libvorbis-dev \
+    libgl1-mesa-dev \
+    libegl1-mesa-dev
+```
+
+### Other Linux Distributions
+
+This software hasn't been tested on non-Debian distributions but should work with equivalent packages. Note that package names may subtly differ.
+
+## Building
+
+Run the following commands from the project root (MSYS2 MinGW64 shell if on Windows):
 
 ```bash
 cmake -S . -B build -G "Ninja"
@@ -28,4 +57,9 @@ cmake --build build
 
 ## Running the game
 
-Run `start_game.cmd`. This starts two processes: one with the `host` flag set, and the other with the `client` flag set.
+From the `build/` directory:
+
+- **Windows**: run `start_game.cmd`
+- **Linux**: run `./start_game.sh`
+
+The script launches two processes (one as the host and one as the client), allowing for local play. Online play coming soon.
