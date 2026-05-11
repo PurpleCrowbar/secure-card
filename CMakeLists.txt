@@ -14,9 +14,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SFML)
 
-file(GLOB_RECURSE SOURCES
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(sodium REQUIRED IMPORTED_TARGET libsodium)
+
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
     "src/*.cpp"
     "src/*.h"
 )
