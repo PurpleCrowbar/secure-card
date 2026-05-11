@@ -13,13 +13,10 @@ FetchContent_Declare(
     SYSTEM
 )
 FetchContent_MakeAvailable(SFML)
-FetchContent_Declare(
-    sodium
-    URL https://download.libsodium.org/libsodium/releases/libsodium-1.0.21-stable-mingw.tar.gz
-)
-FetchContent_MakeAvailable(sodium)
 
 file(GLOB_RECURSE SOURCES
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(sodium REQUIRED IMPORTED_TARGET libsodium)
     "src/*.cpp"
     "src/*.h"
 )
