@@ -12,6 +12,7 @@ FetchContent_Declare(
     GIT_SHALLOW ON
     SYSTEM
 )
+set(SFML_BUILD_AUDIO OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SFML)
 
 find_package(PkgConfig REQUIRED)

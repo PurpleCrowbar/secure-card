@@ -36,8 +36,6 @@ sudo apt install \
     libxi-dev \
     libudev-dev \
     libfreetype-dev \
-    libflac-dev \
-    libvorbis-dev \
     libgl1-mesa-dev \
     libegl1-mesa-dev
 ```
@@ -51,7 +49,7 @@ This software hasn't been tested on non-Debian distributions but should work wit
 Run the following commands from the project root (MSYS2 MinGW64 shell if on Windows):
 
 ```bash
-cmake -S . -B build -G "Ninja"
+cmake -S . -B build -G Ninja
 cmake --build build
 ```
 
