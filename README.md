@@ -1,6 +1,6 @@
 # Secure Card
 
-A 1v1, direct peer-to-peer trading card game implementation. Utilises mental poker protocols and commitment schemes to prevent or detect all possible forms of cheating.
+A 1v1, peer-to-peer trading card game implementation. Utilises mental poker protocols and commitment schemes to prevent or detect all possible forms of cheating. Compatible with Windows, Linux, and macOS.
 
 ## Prerequisites
 
@@ -18,9 +18,11 @@ pacman -S --needed \
     git
 ```
 
-MSVC is not supported.
+MSVC is not officially supported.
 
-### Debian / Ubuntu
+### Linux
+
+#### Debian / Ubuntu
 
 ```bash
 sudo apt update
@@ -40,9 +42,25 @@ sudo apt install \
     libegl1-mesa-dev
 ```
 
-### Other Linux Distributions
+#### Other Distributions
 
 This software hasn't been tested on non-Debian distributions but should work with equivalent packages. Note that package names may subtly differ.
+
+### macOS
+
+Install the [Xcode Command Line Tools](https://developer.apple.com/xcode/resources/):
+
+```bash
+xcode-select --install
+```
+
+This provides Clang, Git, and the SDK SFML needs for graphics and audio.
+
+Install [Homebrew](https://brew.sh), then run:
+
+```bash
+brew install cmake ninja pkg-config libsodium
+```
 
 ## Building
 
