@@ -62,8 +62,6 @@ private:
 
     // Used for the GUI
     GameBridge* bridge = nullptr; // for multithreading
-    // TODO: could perhaps be a queue of events?
-    std::optional<OpponentCardEvent> pendingOppEvent;
 
     PlayerID localPlayer;
     // Local player's deck's contents from the start of the game. Sent post-game for verification

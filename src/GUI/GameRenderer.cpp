@@ -1,16 +1,19 @@
 #include "GameRenderer.h"
+#include "AnimationFactory.h"
 #include "../Cards/CardFactory.h"
 #include <iostream>
 #include <ranges>
 #include <algorithm>
-#include <sodium/randombytes.h>
+
+// TODO: This entire file could do with better documentation.
 
 GameRenderer::GameRenderer(GameBridge& bridge, PlayerID player)
     : bridge(bridge),
       window(sf::VideoMode({1280u, 720u}),
           std::string("Secure Card - Player ") + (player == PlayerID::ONE ? "One (Host)" : "Two (Client)")),
       font("resources/font.ttf"),
-      gameView(sf::FloatRect({0.f, 0.f}, {LOGICAL_WIDTH, LOGICAL_HEIGHT}))
+      gameView(sf::FloatRect({0.f, 0.f}, {LOGICAL_WIDTH, LOGICAL_HEIGHT})),
+      localPlayer(player)
 {
     window.setFramerateLimit(60);
     window.setView(gameView);
@@ -37,7 +40,6 @@ void GameRenderer::loadTextures() {
     cardbackTexture.setSmooth(true);
 }
 
-
 constexpr float textOversample = 3.f;
 
 sf::Text makeText(const sf::Font& font, const std::string& str, unsigned int logicalSize) {
@@ -49,6 +51,100 @@ sf::Text makeText(const sf::Font& font, const std::string& str, unsigned int log
 sf::Vector2f snapToPixel(const sf::RenderWindow& window, const sf::View& view, sf::Vector2f logicalPos) {
     auto pixel = window.mapCoordsToPixel(logicalPos, view);
     return window.mapPixelToCoords(pixel, view);
+}
+
+AnimationContext GameRenderer::buildAnimationContext(const GameSnapshot& snapshot) const {
+    return {
+        .cardTextures = cardTextures,
+        .cardbackTexture = cardbackTexture,
+        .font = font,
+        .localPlayer = localPlayer,
+        .oppHandSize = snapshot.oppHandSize,
+        .myHandSize = static_cast<int>(snapshot.myHand.size()),
+        .cardWidth = CARD_WIDTH,
+        .cardHeight = CARD_HEIGHT,
+        .logicalWidth = LOGICAL_WIDTH,
+        .logicalHeight = LOGICAL_HEIGHT,
+        .getOpponentCardBounds = &GameRenderer::getOpponentCardBoundsStatic,
+        .getPlayerCardBounds = &GameRenderer::getPlayerCardBoundsStatic,
+    };
+}
+
+namespace {
+template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+
+// Apply the visible delta of one event to a snapshot. The cumulative effect of all events in a SnapshotUpdate should
+// match snapshotAfter for the fields touched here; fields not covered (turn flag, statusMessage, winnerMessage,
+// gameOver) are reconciled by splatting snapshotAfter when the animation queue drains.
+void applyEventToSnapshot(GameSnapshot& s, const GameEvent& event, PlayerID localPlayer) {
+    std::visit(overloaded {
+        [&](const CardPlayedEvent& e) {
+            int cost = CardFactory::create(e.card)->getManaCost();
+            if (e.player == localPlayer) {
+                auto it = std::ranges::find(s.myHand, e.card);
+                if (it != s.myHand.end()) s.myHand.erase(it);
+                s.myMana = std::max(0, s.myMana - cost);
+            } else {
+                s.oppHandSize = std::max(0, s.oppHandSize - 1);
+                s.oppMana = std::max(0, s.oppMana - cost);
+            }
+        },
+        [&](const CardDiscardedEvent& e) {
+            if (e.player == localPlayer) {
+                auto it = std::ranges::find(s.myHand, e.card);
+                if (it != s.myHand.end()) s.myHand.erase(it);
+            } else {
+                s.oppHandSize = std::max(0, s.oppHandSize - 1);
+            }
+        },
+        [&](const DamageDealtEvent& e) {
+            if (e.target == localPlayer) s.myHealth -= e.amount;
+            else s.oppHealth -= e.amount;
+        },
+        [&](const LifeGainedEvent& e) {
+            if (e.target == localPlayer) s.myHealth += e.amount;
+            else s.oppHealth += e.amount;
+        },
+        [&](const CardsMilledEvent& e) {
+            if (e.player == localPlayer) s.myDeckSize = std::max(0, s.myDeckSize - e.count);
+            else s.oppDeckSize = std::max(0, s.oppDeckSize - e.count);
+        },
+    }, event);
+}
+}
+
+void GameRenderer::startNextUpdate() {
+    if (pendingUpdates.empty()) return;
+
+    SnapshotUpdate update = std::move(pendingUpdates.front());
+    pendingUpdates.pop_front();
+
+    // Walk events left-to-right; for each event: build its animation using `working` (the snapshot state right BEFORE
+    // this event, so positions originate from the correct hand layout), apply the event's delta, then pair the
+    // animation with a copy of `working` (now post-event). displaySnapshot is swapped to that paired snapshot the
+    // moment the animation begins playing, e.g. a discarded card vanishes from hand right as the red ghost
+    // starts sliding, not earlier
+    GameSnapshot working = displaySnapshot;
+    for (const auto& event : update.events) {
+        AnimationContext ctx = buildAnimationContext(working);
+        auto anim = createAnimation(event, ctx);
+        applyEventToSnapshot(working, event, localPlayer);
+        if (anim) {
+            animationQueue.push_back({working, std::move(anim)});
+        }
+    }
+
+    pendingFinalSnapshot = std::move(update.snapshotAfter);
+
+    if (animationQueue.empty()) {
+        // no animations got queued (event-less update, or every event produced nullptr), so splat the final snapshot
+        // now and chain into the next pending update
+        displaySnapshot = pendingFinalSnapshot;
+        if (!pendingUpdates.empty()) startNextUpdate();
+    } else {
+        // switch to the first step's start-snapshot so the queue's first animation plays against the correct state
+        displaySnapshot = animationQueue.front().snapshotAtStart;
+    }
 }
 
 /**
@@ -63,20 +159,35 @@ void GameRenderer::run() {
         }
 
         mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window), gameView);
-        latestSnapshot = bridge.getSnapshot();
 
-        // Start animation if opponent did something and we're not already animating
-        if (latestSnapshot.oppCardEvent.has_value() && !activeAnimation.has_value()) {
-            startAnimation(latestSnapshot.oppCardEvent.value(), latestSnapshot);
+        // drain new updates from the bridge and append to our local queue
+        auto newUpdates = bridge.drainUpdates();
+        for (auto& u : newUpdates) {
+            pendingUpdates.push_back(std::move(u));
         }
 
-        // Advance animation
-        if (activeAnimation.has_value()) {
-            activeAnimation->elapsed += dt;
-            if (activeAnimation->isComplete()) activeAnimation.reset();
+        // if no animations are playing, try to start the next update
+        if (animationQueue.empty() && !pendingUpdates.empty()) {
+            startNextUpdate();
         }
 
-        render(latestSnapshot);
+        // advance the front animation. when it completes, pop it and either step displaySnapshot forward to the next
+        // animation's paired snapshot, or, if the queue drained, splat pendingFinalSnapshot (covers fields no event
+        // touched, e.g. turn flag) and chain into the next pending update
+        if (!animationQueue.empty()) {
+            if (animationQueue.front().animation->update(dt)) {
+                animationQueue.pop_front();
+
+                if (animationQueue.empty()) {
+                    displaySnapshot = pendingFinalSnapshot;
+                    if (!pendingUpdates.empty()) startNextUpdate();
+                } else {
+                    displaySnapshot = animationQueue.front().snapshotAtStart;
+                }
+            }
+        }
+
+        render(displaySnapshot);
     }
 
     bridge.requestQuit();
@@ -97,7 +208,7 @@ void GameRenderer::handleEvent(const sf::Event& event) {
         if (mouseEvent->button != sf::Mouse::Button::Left) return;
 
         auto mousePos = window.mapPixelToCoords(mouseEvent->position);
-        if (!latestSnapshot.isMyTurn) return; // maybe more here at some point, but for now just end turn / click card
+        if (!displaySnapshot.isMyTurn) return; // maybe more here at some point, but for now just end turn / click card
 
         // check End Turn button
         if (isEndTurnButtonClicked(mousePos)) {
@@ -106,7 +217,7 @@ void GameRenderer::handleEvent(const sf::Event& event) {
         }
 
         // check card clicks
-        int cardIndex = getClickedCardIndex(mousePos, latestSnapshot);
+        int cardIndex = getClickedCardIndex(mousePos, displaySnapshot);
         if (cardIndex > 0) {
             bridge.submitInput(cardIndex);
         }
@@ -251,41 +362,9 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
         window.draw(text);
     }
 
-    // opponent card animation
-    if (activeAnimation.has_value()) {
-        const auto& anim = activeAnimation.value();
-        float t = anim.elapsed;
-
-        // compute position (how far from hand) and alpha based on animation phase
-        sf::Vector2f pos;
-        uint8_t alpha = 255;
-        if (t < CardAnimation::SLIDE_DURATION) {
-            // slide phase: so lerp from start to end
-            float progress = t / CardAnimation::SLIDE_DURATION;
-            pos.x = anim.startPos.x + (anim.endPos.x - anim.startPos.x) * progress;
-            pos.y = anim.startPos.y + (anim.endPos.y - anim.startPos.y) * progress;
-        } else if (t < CardAnimation::SLIDE_DURATION + CardAnimation::HOLD_DURATION) {
-            // hold phase: stay at end position
-            pos = anim.endPos;
-        } else {
-            // fade phase: stay at end, reduce alpha
-            pos = anim.endPos;
-            float fadeProgress = (t - CardAnimation::SLIDE_DURATION - CardAnimation::HOLD_DURATION) / CardAnimation::FADE_DURATION;
-            alpha = static_cast<uint8_t>(255.f * (1.f - std::min(fadeProgress, 1.f)));
-        }
-
-        auto it = cardTextures.find(anim.card);
-        if (it != cardTextures.end()) {
-            sf::Sprite sprite(it->second);
-            sprite.setPosition(snapToPixel(window, gameView, pos));
-            sprite.setScale({
-                CARD_WIDTH / static_cast<float>(it->second.getSize().x),
-                CARD_HEIGHT / static_cast<float>(it->second.getSize().y)
-            });
-            if (anim.isDiscard) sprite.setColor(sf::Color(255, 80, 80, alpha));
-            else sprite.setColor(sf::Color(255, 255, 255, alpha));
-            window.draw(sprite);
-        }
+    // render the active animation (front of queue)
+    if (!animationQueue.empty()) {
+        animationQueue.front().animation->render(window, gameView);
     }
 
     // game over
@@ -308,18 +387,25 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
     window.display();
 }
 
-void GameRenderer::startAnimation(const OpponentCardEvent& event, const GameSnapshot& snapshot) {
-    // NOTE: have to use oppHandSize + 1 because snapshot already reflects the decremented hand count
-    int preActionHandSize = std::max(1, snapshot.oppHandSize + 1);
-    int slotIndex = static_cast<int>(randombytes_uniform(static_cast<uint32_t>(preActionHandSize)));
-    auto startBounds = getOpponentCardBounds(slotIndex, preActionHandSize);
+sf::FloatRect GameRenderer::getOpponentCardBoundsStatic(int index, int handSize,
+    float logicalWidth, float cardWidth, float cardHeight)
+{
+    constexpr float spacing = 10.f; // matches CARD_SPACING
+    float totalWidth = handSize * cardWidth + (handSize - 1) * spacing;
+    float startX = (logicalWidth - totalWidth) / 2.f;
+    float x = startX + index * (cardWidth + spacing);
+    float y = 70.f;
+    return sf::FloatRect({x, y}, {cardWidth, cardHeight});
+}
 
-    activeAnimation = CardAnimation {
-        .card = event.card,
-        .isDiscard = (event.type == OpponentCardEventType::DISCARD),
-        .startPos = startBounds.position,
-        .endPos = {LOGICAL_WIDTH / 2.f - CARD_WIDTH / 2.f, LOGICAL_HEIGHT / 2.f - CARD_HEIGHT / 2.f},
-    };
+sf::FloatRect GameRenderer::getPlayerCardBoundsStatic(int index, int handSize, float logicalWidth, float cardWidth, float cardHeight) {
+    constexpr float spacing = 10.f;
+    constexpr float logicalHeight = 720.f; // matches LOGICAL_HEIGHT
+    float totalWidth = handSize * cardWidth + (handSize - 1) * spacing;
+    float startX = (logicalWidth - totalWidth) / 2.f;
+    float x = startX + index * (cardWidth + spacing);
+    float y = logicalHeight - cardHeight - 30.f;
+    return sf::FloatRect({x, y}, {cardWidth, cardHeight});
 }
 
 void GameRenderer::updateViewport(sf::Vector2u windowSize) {

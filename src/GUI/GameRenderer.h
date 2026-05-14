@@ -2,26 +2,12 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/System/Clock.hpp>
 #include <map>
-#include <optional>
+#include <deque>
+#include <memory>
 #include "GameBridge.h"
+#include "Animation.h"
+#include "AnimationFactory.h"
 #include "../Cards/CardID.h"
-
-struct CardAnimation {
-    CardID card;
-    bool isDiscard;
-    sf::Vector2f startPos;
-    sf::Vector2f endPos;
-    float elapsed = 0.f;
-
-    static constexpr float SLIDE_DURATION = 0.5f;
-    static constexpr float HOLD_DURATION = 0.5f;
-    static constexpr float FADE_DURATION = 0.4f;
-
-    [[nodiscard]] float totalDuration() const { return SLIDE_DURATION + HOLD_DURATION + FADE_DURATION; }
-    [[nodiscard]] bool isComplete() const { return elapsed >= totalDuration(); }
-};
-
-enum class PlayerID : std::uint8_t;
 
 class GameRenderer {
 public:
@@ -42,6 +28,10 @@ private:
     [[nodiscard]] sf::FloatRect getOpponentCardBounds(int index, int handSize) const;
     [[nodiscard]] sf::FloatRect getEndTurnButtonBounds() const;
 
+    // Static versions for use by AnimationFactory (no instance needed)
+    static sf::FloatRect getOpponentCardBoundsStatic(int index, int handSize, float logicalWidth, float cardWidth, float cardHeight);
+    static sf::FloatRect getPlayerCardBoundsStatic(int index, int handSize, float logicalWidth, float cardWidth, float cardHeight);
+
     GameBridge& bridge;
     sf::RenderWindow window;
     sf::Font font;
@@ -50,12 +40,28 @@ private:
     std::map<CardID, sf::Texture> cardTextures;
     sf::Texture cardbackTexture;
 
-    GameSnapshot latestSnapshot;
+    PlayerID localPlayer;
+    GameSnapshot displaySnapshot; // the visual state rendered on screen (lags behind true state)
     sf::Vector2f mousePos;
 
-    std::optional<CardAnimation> activeAnimation;
+    // Pending snapshot updates, each with events to animate before advancing to that snapshot
+    std::deque<SnapshotUpdate> pendingUpdates;
+
+    // Each step pairs an animation with the displaySnapshot to switch to when it begins playing.
+    // This lets per-event snapshot fields (e.g. HP for damage, hand contents for discards) advance
+    // in lockstep with their own animation rather than all at once at update start
+    struct AnimationStep {
+        GameSnapshot snapshotAtStart;
+        std::unique_ptr<Animation> animation;
+    };
+    std::deque<AnimationStep> animationQueue;
+    // Applied once the queue drains, to catch any fields not covered by per-event deltas
+    // (turn flag, gameOver, statusMessage, winnerMessage, etc)
+    GameSnapshot pendingFinalSnapshot;
     sf::Clock frameClock;
-    void startAnimation(const OpponentCardEvent& event, const GameSnapshot& snapshot);
+
+    void startNextUpdate();
+    AnimationContext buildAnimationContext(const GameSnapshot& snapshot) const;
 
     void updateViewport(sf::Vector2u windowSize);
 

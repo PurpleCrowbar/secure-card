@@ -41,11 +41,6 @@ GameSnapshot Game::buildSnapshot(const std::string& statusMessage) {
     snap.isMyTurn = state.activePlayer.has_value() && state.activePlayer.value() == localPlayer;
     snap.statusMessage = statusMessage;
 
-    if (pendingOppEvent.has_value()) {
-        snap.oppCardEvent = pendingOppEvent;
-        pendingOppEvent.reset();
-    }
-
     auto [gameOver, winner] = state.isGameOver();
     snap.gameOver = gameOver;
     if (gameOver) {
@@ -353,9 +348,7 @@ void Game::discard(PlayerID player, CardID card) {
         // This returns false if hand is empty. Could throw exception if desired, but I think it's OK
         unknownHand.removeCard();
     }
-    if (player != localPlayer) {
-        pendingOppEvent = OpponentCardEvent {card, OpponentCardEventType::DISCARD};
-    }
+    if (bridge) bridge->enqueueEvent(CardDiscardedEvent{card, player});
     playerData.graveyard.push_back(card);
     verifier.logAction(Action::Discard(player, card));
 }
@@ -421,6 +414,7 @@ void Game::mill(PlayerID millingPlayer, uint8_t count, const bool logInVerifier)
             << CardFactory::create(milledCards[0])->getName() << "\n";
     }
     if (logInVerifier) verifier.logAction(Action::Mill(millingPlayer, totalToMill));
+    if (bridge) bridge->enqueueEvent(CardsMilledEvent{millingPlayer, static_cast<int>(totalToMill)});
 }
 
 /**
@@ -694,6 +688,7 @@ void Game::playCardLocal(int handIndex) {
     myData.currentMana -= card->getManaCost();
     // delete from hand
     hand.removeCard(cardId);
+    if (bridge) bridge->enqueueEvent(CardPlayedEvent{cardId, localPlayer});
     // resolve the card's effect
     card->resolve(*this, localPlayer);
     // add to graveyard / discard pile
@@ -763,7 +758,7 @@ void Game::handleOpponentPlayCard() {
     network.sendPacketType(PacketType::PERMITTED);
     std::cout << "  Opponent plays " << card->getName() << "!\n";
     verifier.logAction(Action::PlayCard(PlayerIDUtils::getOpponent(localPlayer), cardId));
-    pendingOppEvent = OpponentCardEvent{cardId, OpponentCardEventType::PLAY};
+    if (bridge) bridge->enqueueEvent(CardPlayedEvent{cardId, opponent});
 
     // opponent spent mana
     oppData.currentMana -= card->getManaCost();
@@ -789,11 +784,13 @@ void Game::dealDamage(PlayerID target, int amount) {
                   << data.currentHealth << " HP remaining)\n";
     }
     verifier.logAction(Action::DealDamage(target, amount));
+    if (bridge) bridge->enqueueEvent(DamageDealtEvent{target, amount});
 }
 
 void Game::gainLife(PlayerID target, int amount) {
     state.getPlayerData(target).currentHealth += amount;
     verifier.logAction(Action::GainLife(target, amount));
+    if (bridge) bridge->enqueueEvent(LifeGainedEvent{target, amount});
 }
 
 int Game::getMana(PlayerID player) const {

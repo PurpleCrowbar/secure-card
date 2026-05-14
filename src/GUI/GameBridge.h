@@ -6,13 +6,7 @@
 #include <string>
 #include <atomic>
 #include "../Cards/CardID.h"
-
-enum class OpponentCardEventType : uint8_t { PLAY, DISCARD };
-
-struct OpponentCardEvent {
-    CardID card;
-    OpponentCardEventType type;
-};
+#include "GameEvent.h"
 
 struct GameSnapshot {
     // local player
@@ -32,7 +26,13 @@ struct GameSnapshot {
     bool gameOver = false;
     std::string statusMessage;
     std::optional<std::string> winnerMessage;
-    std::optional<OpponentCardEvent> oppCardEvent;
+};
+
+// A snapshot paired with the events that preceded it. The GUI should play the events as animations, then update its
+// display to this snapshot once the animations complete
+struct SnapshotUpdate {
+    std::vector<GameEvent> events;
+    GameSnapshot snapshotAfter;
 };
 
 // This class's sole function is to bridge the gap between game logic and UI which run on separate threads
@@ -42,16 +42,18 @@ public:
     // methods called from game thread
     [[nodiscard]] int publishStateAndWaitForInput(const GameSnapshot& snapshot);
     void publishState(const GameSnapshot& snapshot);
+    void enqueueEvent(GameEvent event);
 
     // methods called from GUI thread
-    [[nodiscard]] GameSnapshot getSnapshot();
+    [[nodiscard]] std::vector<SnapshotUpdate> drainUpdates();
     void submitInput(int choice);
     void requestQuit();
 
 private:
     std::mutex mutex;
     std::condition_variable inputCV;
-    GameSnapshot currentSnapshot;
+    std::vector<GameEvent> pendingEvents;
+    std::vector<SnapshotUpdate> updateQueue;
     std::optional<int> pendingInput;
     std::atomic<bool> quit = false;
 };

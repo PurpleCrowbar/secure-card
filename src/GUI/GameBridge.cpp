@@ -3,12 +3,14 @@
 
 /**
  * Publishes the game snapshot then blocks until receives input from GUI.
+ * Any events enqueued since the last publish are bundled with this snapshot.
  * @param snapshot Game snapshot to publish
  * @return 0 = end turn, 1 or more = play card at index, -1 = quit
  */
 int GameBridge::publishStateAndWaitForInput(const GameSnapshot& snapshot) {
     std::unique_lock lock(mutex);
-    currentSnapshot = snapshot;
+    updateQueue.push_back({std::move(pendingEvents), snapshot});
+    pendingEvents.clear();
     pendingInput.reset();
 
     inputCV.wait(lock, [this] { return pendingInput.has_value() || quit.load(); });
@@ -20,23 +22,35 @@ int GameBridge::publishStateAndWaitForInput(const GameSnapshot& snapshot) {
 
 /**
  * Like publishStateAndWaitForInput, except doesn't wait for input from the GUI. Instead, this just updates the
- * GUI. Called all the time during opponent's turn during which we can't do anything but still need to update the GUI
+ * GUI. Called all the time during opponent's turn during which we can't do anything but still need to update the GUI.
+ * Any events enqueued since the last publish are bundled with this snapshot.
  * @param snapshot Game snapshot to publish
  */
 void GameBridge::publishState(const GameSnapshot& snapshot) {
     std::lock_guard lock(mutex);
-    currentSnapshot = snapshot;
+    updateQueue.push_back({std::move(pendingEvents), snapshot});
+    pendingEvents.clear();
 }
 
 /**
- * Called by GUI. Gets the current snapshot of the game to render the GUI.
- * @return Current game snapshot
+ * Called by the game thread to enqueue a visual event (card played, damage dealt, etc).
+ * Events accumulate until the next publishState/publishStateAndWaitForInput bundles them with a snapshot.
  */
-GameSnapshot GameBridge::getSnapshot() {
+void GameBridge::enqueueEvent(GameEvent event) {
     std::lock_guard lock(mutex);
-    GameSnapshot snap = currentSnapshot;
-    currentSnapshot.oppCardEvent.reset(); // consume event so it's only seen once
-    return snap;
+    pendingEvents.push_back(std::move(event));
+}
+
+/**
+ * Called by GUI. Drains all pending snapshot updates from the bridge.
+ * Each update contains the events that occurred and the snapshot state after those events.
+ * @return Vector of snapshot updates to process in order
+ */
+std::vector<SnapshotUpdate> GameBridge::drainUpdates() {
+    std::lock_guard lock(mutex);
+    std::vector<SnapshotUpdate> result = std::move(updateQueue);
+    updateQueue.clear();
+    return result;
 }
 
 /**
