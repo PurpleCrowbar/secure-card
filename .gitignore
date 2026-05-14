@@ -42,3 +42,4 @@
 
 # IDE-specific
 .idea/
+cmake-build-*/
