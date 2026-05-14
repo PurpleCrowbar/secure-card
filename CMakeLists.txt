@@ -16,7 +16,13 @@ set(SFML_BUILD_AUDIO OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SFML)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(sodium REQUIRED IMPORTED_TARGET libsodium)
+pkg_check_modules(sodium REQUIRED libsodium)
+
+find_library(SODIUM_STATIC_LIB
+    NAMES libsodium.a
+    HINTS ${sodium_LIBRARY_DIRS}
+    REQUIRED
+)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
     "src/*.cpp"
@@ -24,7 +30,12 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
 )
 add_executable(secure_card ${SOURCES})
 
-target_link_libraries(secure_card PRIVATE SFML::Graphics SFML::Window SFML::Network SFML::System PkgConfig::sodium)
+target_include_directories(secure_card PRIVATE ${sodium_INCLUDE_DIRS})
+target_link_libraries(secure_card PRIVATE SFML::Graphics SFML::Window SFML::Network SFML::System ${SODIUM_STATIC_LIB})
+
+if (WIN32)
+    target_compile_definitions(secure_card PRIVATE SODIUM_STATIC)
+endif()
 
 # Only statically link runtime if building with MinGW
 if (MINGW)
