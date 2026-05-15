@@ -13,7 +13,8 @@ namespace CardSets {
         HEALING_SALVE,
         SABOTAGE,
         EVIL_ENGINEERING,
-        MEDITATE
+        MEDITATE,
+        SHARED_KNOWLEDGE
     };
 
     // Cards created by effects and other cards

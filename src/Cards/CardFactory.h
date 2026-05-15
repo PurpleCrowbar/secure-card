@@ -12,6 +12,7 @@
 #include "CardImplementations/LightningBolt.h"
 #include "CardImplementations/Meditate.h"
 #include "CardImplementations/Sabotage.h"
+#include "CardImplementations/SharedKnowledge.h"
 #include "CardImplementations/SpectralWail.h"
 #include "CardImplementations/TheSuperweapon.h"
 
@@ -30,6 +31,7 @@ namespace CardFactory {
             case DARK_INTIMATIONS: return std::make_unique<DarkIntimations>();
             case THE_SUPERWEAPON: return std::make_unique<TheSuperweapon>();
             case MEDITATE: return std::make_unique<Meditate>();
+            case SHARED_KNOWLEDGE: return std::make_unique<SharedKnowledge>();
             default: throw std::runtime_error("Unknown card ID");
         }
     }
