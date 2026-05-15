@@ -14,7 +14,7 @@ public:
     [[nodiscard]] virtual int getManaCost() const = 0;
     [[nodiscard]] virtual std::string getName() const = 0;
     [[nodiscard]] virtual std::string getRulesText() const = 0;
-    [[nodiscard]] virtual uint8_t getMaxCopies() const { return 5; };
+    [[nodiscard]] virtual uint8_t getMaxCopies() const { return 4; };
 
 protected:
     CardID id;
