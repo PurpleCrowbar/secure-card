@@ -27,6 +27,7 @@ public:
     void performShuffle(PlayerID deckOwner);
     void discard(PlayerID player, CardID card);
     void mill(PlayerID millingPlayer, uint8_t count, bool logInVerifier = true);
+    void addUnencryptedCardToDeck(PlayerID deckOwner, CardID card, uint8_t index);
     [[nodiscard]] bool flipCoin() const;
 
     // Getters

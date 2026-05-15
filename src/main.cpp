@@ -38,6 +38,7 @@ int main(const int argc, char** argv) {
     selectedDeck[CardID::SPECTRAL_WAIL] = 5;
     selectedDeck[CardID::JETTISON] = 5;
     selectedDeck[CardID::HEALING_SALVE] = 5;
+    selectedDeck[CardID::SABOTAGE] = 5;
 
     GameBridge bridge;
     Game game(network, player, selectedDeck);

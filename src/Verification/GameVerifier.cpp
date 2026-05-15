@@ -250,6 +250,11 @@ bool GameVerifier::run() {
                 return true;
             },
 
+            [&](const Action::AddCardToDeck& a) -> bool {
+                auto& pd = state.getPlayerData(a.deckOwner);
+                return pd.deck.addUnencryptedCard(a.card, a.index);
+            },
+
             [&](const Action::VerifyCommitment& a) -> bool {
                 if (currentCommitment >= enemyCommitments.size()) return false;
                 return enemyCommitments[currentCommitment++]->verify(state);

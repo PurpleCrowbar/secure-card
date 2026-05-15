@@ -6,7 +6,9 @@
 #include "CardImplementations/Disorganize.h"
 #include "CardImplementations/HealingSalve.h"
 #include "CardImplementations/Jettison.h"
+#include "CardImplementations/Junk.h"
 #include "CardImplementations/LightningBolt.h"
+#include "CardImplementations/Sabotage.h"
 #include "CardImplementations/SpectralWail.h"
 
 namespace CardFactory {
@@ -18,6 +20,8 @@ namespace CardFactory {
             case SPECTRAL_WAIL: return std::make_unique<SpectralWail>();
             case JETTISON: return std::make_unique<Jettison>();
             case HEALING_SALVE: return std::make_unique<HealingSalve>();
+            case SABOTAGE: return std::make_unique<Sabotage>();
+            case JUNK: return std::make_unique<Junk>();
             default: throw std::runtime_error("Unknown card ID");
         }
     }
