@@ -12,7 +12,8 @@ namespace CardSets {
         JETTISON,
         HEALING_SALVE,
         SABOTAGE,
-        EVIL_ENGINEERING
+        EVIL_ENGINEERING,
+        MEDITATE
     };
 
     // Cards created by effects and other cards

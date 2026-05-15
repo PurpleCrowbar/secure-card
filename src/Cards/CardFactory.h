@@ -10,6 +10,7 @@
 #include "CardImplementations/Jettison.h"
 #include "CardImplementations/Junk.h"
 #include "CardImplementations/LightningBolt.h"
+#include "CardImplementations/Meditate.h"
 #include "CardImplementations/Sabotage.h"
 #include "CardImplementations/SpectralWail.h"
 #include "CardImplementations/TheSuperweapon.h"
@@ -28,6 +29,7 @@ namespace CardFactory {
             case EVIL_ENGINEERING: return std::make_unique<EvilEngineering>();
             case DARK_INTIMATIONS: return std::make_unique<DarkIntimations>();
             case THE_SUPERWEAPON: return std::make_unique<TheSuperweapon>();
+            case MEDITATE: return std::make_unique<Meditate>();
             default: throw std::runtime_error("Unknown card ID");
         }
     }
