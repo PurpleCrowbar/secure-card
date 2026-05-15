@@ -37,7 +37,7 @@ public:
 
         Deck deck;
         std::variant<ClearHand, UnknownHand> hand;
-        int16_t maxHealth = 10, currentHealth = maxHealth;
+        int16_t maxHealth = 15, currentHealth = maxHealth;
         uint8_t maxMana = 3, currentMana = maxMana;
         uint8_t fatigueCount = 0;
         std::vector<CardID> graveyard = {};

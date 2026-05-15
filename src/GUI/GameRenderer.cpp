@@ -245,7 +245,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
         window.draw(text);
 
         auto stats = makeText(font,
-            "HP: " + std::to_string(snapshot.oppHealth) +
+            "HP: " + std::to_string(snapshot.oppHealth) + "/" + std::to_string(snapshot.oppMaxHealth) +
             "  |  Mana: " + std::to_string(snapshot.oppMana) +
             "  |  Deck: " + std::to_string(snapshot.oppDeckSize), 16);
         stats.setFillColor(sf::Color::White);
@@ -273,7 +273,7 @@ void GameRenderer::render(const GameSnapshot& snapshot) {
         window.draw(text);
 
         auto stats = makeText(font,
-            "HP: " + std::to_string(snapshot.myHealth) +
+            "HP: " + std::to_string(snapshot.myHealth) + "/" + std::to_string(snapshot.myMaxHealth) +
             "  |  Mana: " + std::to_string(snapshot.myMana) +
             "  |  Deck: " + std::to_string(snapshot.myDeckSize), 16);
         stats.setFillColor(sf::Color::White);

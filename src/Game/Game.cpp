@@ -26,6 +26,7 @@ GameSnapshot Game::buildSnapshot(const std::string& statusMessage) {
 
     GameSnapshot snap;
     snap.myHealth = myData.currentHealth;
+    snap.myMaxHealth = myData.maxHealth;
     snap.myMana = myData.currentMana;
     snap.myDeckSize = myData.deck.getSize();
 
@@ -34,6 +35,7 @@ GameSnapshot Game::buildSnapshot(const std::string& statusMessage) {
     }
 
     snap.oppHealth = oppData.currentHealth;
+    snap.oppMaxHealth = oppData.maxHealth;
     snap.oppMana = oppData.currentMana;
     snap.oppDeckSize = oppData.deck.getSize();
     snap.oppHandSize = static_cast<int>(state.getHandSize(opponent));
@@ -801,9 +803,14 @@ void Game::dealDamage(PlayerID target, int amount) {
 }
 
 void Game::gainLife(PlayerID target, int amount) {
-    state.getPlayerData(target).currentHealth += amount;
-    verifier.logAction(Action::GainLife(target, amount));
-    if (bridge) bridge->enqueueEvent(LifeGainedEvent{target, amount});
+    auto& pd = state.getPlayerData(target);
+    int healAmount;
+    if (pd.currentHealth + amount > pd.maxHealth) healAmount = pd.maxHealth - pd.currentHealth;
+    else healAmount = amount;
+    if (healAmount == 0) return;
+    pd.currentHealth += healAmount;
+    verifier.logAction(Action::GainLife(target, healAmount));
+    if (bridge) bridge->enqueueEvent(LifeGainedEvent{target, healAmount});
 }
 
 int Game::getMana(PlayerID player) const {
@@ -828,12 +835,12 @@ void Game::printGameState() const {
     const auto& ourHand = std::get<ClearHand>(myData.hand);
     const auto& oppHand = std::get<UnknownHand>(oppData.hand);
 
-    std::cout << "\n\n OPPONENT: " << oppData.currentHealth << " HP | "
+    std::cout << "\n\n OPPONENT: " << oppData.currentHealth << "/" << oppData.maxHealth << " HP | "
               << static_cast<int>(oppData.currentMana) << " mana | "
               << static_cast<int>(oppData.deck.getSize()) << " cards in deck | "
               << std::to_string(oppHand.getSize()) << " in hand\n";
     std::cout << "---------------------------------------\n";
-    std::cout << "  YOU:      " << myData.currentHealth << " HP | "
+    std::cout << "  YOU:      " << myData.currentHealth << "/" << myData.maxHealth << " HP | "
               << static_cast<int>(myData.currentMana) << " mana | "
               << static_cast<int>(myData.deck.getSize()) << " cards in deck\n";
     std::cout << "  Hand:\n";

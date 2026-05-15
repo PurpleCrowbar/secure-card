@@ -10,13 +10,15 @@
 
 struct GameSnapshot {
     // local player
-    int myHealth = 10;
+    int myHealth = 15;
+    int myMaxHealth = 15;
     int myMana = 5;
     int myDeckSize = 0;
     std::vector<CardID> myHand;
 
     // opponent
-    int oppHealth = 10;
+    int oppHealth = 15;
+    int oppMaxHealth = 15;
     int oppMana = 5;
     int oppDeckSize = 0;
     int oppHandSize = 0;
