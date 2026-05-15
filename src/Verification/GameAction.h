@@ -13,6 +13,7 @@ namespace Action {
     struct EndTurn          { PlayerID player; };
     struct Shuffle          { PlayerID deckOwner; };
     struct Mill             { PlayerID deckOwner; uint8_t amount; };
+    struct AddCardToDeck    { PlayerID deckOwner; CardID card; uint8_t index; };
     struct VerifyCommitment { };
 }
 
@@ -25,5 +26,6 @@ using ActionEntry = std::variant<
     Action::EndTurn,
     Action::Shuffle,
     Action::Mill,
+    Action::AddCardToDeck,
     Action::VerifyCommitment
 >;
