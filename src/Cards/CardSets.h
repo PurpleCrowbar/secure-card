@@ -8,6 +8,7 @@ namespace CardSets {
         LIGHTNING_BOLT,
         DISORGANIZE,
         SPECTRAL_WAIL,
-        JETTISON
+        JETTISON,
+        HEALING_SALVE
     };
 }

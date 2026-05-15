@@ -4,6 +4,7 @@
 #include "CardID.h"
 // TODO: Add "CardImplementations/All.h" for storing these headers?
 #include "CardImplementations/Disorganize.h"
+#include "CardImplementations/HealingSalve.h"
 #include "CardImplementations/Jettison.h"
 #include "CardImplementations/LightningBolt.h"
 #include "CardImplementations/SpectralWail.h"
@@ -16,6 +17,7 @@ namespace CardFactory {
             case DISORGANIZE: return std::make_unique<Disorganize>();
             case SPECTRAL_WAIL: return std::make_unique<SpectralWail>();
             case JETTISON: return std::make_unique<Jettison>();
+            case HEALING_SALVE: return std::make_unique<HealingSalve>();
             default: throw std::runtime_error("Unknown card ID");
         }
     }

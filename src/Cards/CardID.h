@@ -7,6 +7,7 @@ enum class CardID : uint16_t {
     DISORGANIZE,
     SPECTRAL_WAIL,
     JETTISON,
+    HEALING_SALVE,
     End // used to get enum val count and max enum val
 };
 
