@@ -425,6 +425,11 @@ void Game::addUnencryptedCardToDeck(PlayerID deckOwner, CardID card, uint8_t ind
     verifier.logAction(Action::AddCardToDeck(deckOwner, card, index));
 }
 
+void Game::addUnencryptedCardToDeckBottom(PlayerID deckOwner, CardID card, uint8_t fromBottom) {
+    auto& playerData = state.getPlayerData(deckOwner);
+    addUnencryptedCardToDeck(deckOwner, card, playerData.deck.getSize() - 1 - fromBottom);
+}
+
 /**
  * Networked function that simulates a coin flip between the two players. Implementation is a standard Blum coin flip.
  * Alice sends Bob a commitment of the bit she chose. Bob then sends her his bit. She then reveals her initial bit.

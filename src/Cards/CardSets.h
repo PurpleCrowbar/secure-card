@@ -11,11 +11,14 @@ namespace CardSets {
         SPECTRAL_WAIL,
         JETTISON,
         HEALING_SALVE,
-        SABOTAGE
+        SABOTAGE,
+        EVIL_ENGINEERING
     };
 
     // Cards created by effects and other cards
     static const std::set CreatedCards {
-        JUNK
+        JUNK,
+        DARK_INTIMATIONS,
+        THE_SUPERWEAPON
     };
 }

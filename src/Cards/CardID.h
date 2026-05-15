@@ -10,6 +10,9 @@ enum class CardID : uint16_t {
     HEALING_SALVE,
     SABOTAGE,
     JUNK,
+    EVIL_ENGINEERING,
+    DARK_INTIMATIONS,
+    THE_SUPERWEAPON,
     End // used to get enum val count and max enum val
 };
 
