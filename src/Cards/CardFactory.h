@@ -14,6 +14,7 @@
 #include "CardImplementations/Sabotage.h"
 #include "CardImplementations/SharedKnowledge.h"
 #include "CardImplementations/SpectralWail.h"
+#include "CardImplementations/SplittingHeadache.h"
 #include "CardImplementations/TheSuperweapon.h"
 
 namespace CardFactory {
@@ -32,6 +33,7 @@ namespace CardFactory {
             case THE_SUPERWEAPON: return std::make_unique<TheSuperweapon>();
             case MEDITATE: return std::make_unique<Meditate>();
             case SHARED_KNOWLEDGE: return std::make_unique<SharedKnowledge>();
+            case SPLITTING_HEADACHE: return std::make_unique<SplittingHeadache>();
             default: throw std::runtime_error("Unknown card ID");
         }
     }

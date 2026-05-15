@@ -814,6 +814,10 @@ std::map<CardID, uint8_t> Game::getLocalPlayerHandContents() const {
     return std::get<ClearHand>(state.getImmutablePlayerData(localPlayer).hand).getUnorderedHandContents();
 }
 
+uint8_t Game::getHandSize(PlayerID player) const {
+    return state.getHandSize(player);
+}
+
 /**
  * Temporary function for displaying the game whilst graphics are unimplemented. Ugly but does the job
  */

@@ -14,7 +14,8 @@ namespace CardSets {
         SABOTAGE,
         EVIL_ENGINEERING,
         MEDITATE,
-        SHARED_KNOWLEDGE
+        SHARED_KNOWLEDGE,
+        SPLITTING_HEADACHE
     };
 
     // Cards created by effects and other cards

@@ -35,6 +35,7 @@ public:
     [[nodiscard]] PlayerID getLocalPlayer() const { return localPlayer; }
     [[nodiscard]] int getMana(PlayerID player) const;
     [[nodiscard]] std::map<CardID, uint8_t> getLocalPlayerHandContents() const;
+    [[nodiscard]] uint8_t getHandSize(PlayerID player) const;
 
     Network& network;
     GameVerifier verifier;
