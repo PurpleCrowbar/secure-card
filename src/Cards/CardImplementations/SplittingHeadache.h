@@ -10,6 +10,6 @@ public:
     [[nodiscard]] int getManaCost() const override { return 2; }
     [[nodiscard]] std::string getName() const override { return "Splitting Headache"; }
     [[nodiscard]] std::string getRulesText() const override {
-        return "Deal X damage to opponent, where X is the number of cards in their hand.";
+        return "Deal X damage to opponent, where X is the number of cards in their hand minus two.";
     }
 };
