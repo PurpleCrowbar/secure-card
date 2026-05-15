@@ -417,6 +417,14 @@ void Game::mill(PlayerID millingPlayer, uint8_t count, const bool logInVerifier)
     if (bridge) bridge->enqueueEvent(CardsMilledEvent{millingPlayer, static_cast<int>(totalToMill)});
 }
 
+void Game::addUnencryptedCardToDeck(PlayerID deckOwner, CardID card, uint8_t index) {
+    auto& playerData = state.getPlayerData(deckOwner);
+    if (!playerData.deck.addUnencryptedCard(card, index)) {
+        throw std::runtime_error("[Game::addUnencryptedCardToDeck] Invalid index supplied.");
+    }
+    verifier.logAction(Action::AddCardToDeck(deckOwner, card, index));
+}
+
 /**
  * Networked function that simulates a coin flip between the two players. Implementation is a standard Blum coin flip.
  * Alice sends Bob a commitment of the bit she chose. Bob then sends her his bit. She then reveals her initial bit.
