@@ -429,7 +429,9 @@ void Game::addUnencryptedCardToDeck(PlayerID deckOwner, CardID card, uint8_t ind
 
 void Game::addUnencryptedCardToDeckBottom(PlayerID deckOwner, CardID card, uint8_t fromBottom) {
     auto& playerData = state.getPlayerData(deckOwner);
-    addUnencryptedCardToDeck(deckOwner, card, playerData.deck.getSize() - 1 - fromBottom);
+    uint8_t deckSize = playerData.deck.getSize();
+    if (deckSize == 0) addUnencryptedCardToDeck(deckOwner, card, 0);
+    else addUnencryptedCardToDeck(deckOwner, card, deckSize - 1 - fromBottom);
 }
 
 /**

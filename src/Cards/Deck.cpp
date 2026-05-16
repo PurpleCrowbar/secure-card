@@ -80,7 +80,7 @@ bool Deck::addOpponentKey(uint8_t index, const Scalar& remoteKey) {
  * @return False if index invalid; else true
  */
 bool Deck::addUnencryptedCard(CardID id, uint8_t index) {
-    if (index >= contents.size()) [[unlikely]] return false;
+    if (index >= contents.size() && index != 0) [[unlikely]] return false;
 
     contents.insert(contents.begin() + index, {id, { std::nullopt, std::nullopt }, true});
     if (plaintextContents.has_value()) plaintextContents.value()[id]++;
