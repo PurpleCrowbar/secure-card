@@ -35,6 +35,8 @@ Deck::Deck(const std::map<CardID, uint8_t>& plaintextDeckContents) : lookupTable
 }
 
 void Deck::setEncryptedContents(const std::vector<std::pair<Point, Scalar>>& encryptedDeck) {
+    if (encryptedDeck.size() > Constants::MAX_DECK_SIZE) [[unlikely]]
+        throw std::logic_error("[Deck::setEncryptedContents] Deck size exceeds maximum");
     contents.clear();
     contents.reserve(encryptedDeck.size());
     for (const auto& [cardPoint, key] : encryptedDeck) {
@@ -80,6 +82,9 @@ bool Deck::addOpponentKey(uint8_t index, const Scalar& remoteKey) {
  */
 void Deck::addUnencryptedCard(CardID id, uint8_t index) {
     if (index > contents.size()) [[unlikely]] throw std::logic_error("[Deck::addUnencryptedCard] Index out of bounds");
+    if (contents.size() == Constants::MAX_DECK_SIZE) [[unlikely]]
+        throw std::logic_error("[Deck::addUnencryptedCard] Deck is already full");
+
     contents.insert(contents.begin() + index, {id, { std::nullopt, std::nullopt }, true});
     if (plaintextContents.has_value()) plaintextContents.value()[id]++;
 }
@@ -91,6 +96,9 @@ void Deck::addUnencryptedCard(CardID id, uint8_t index) {
  */
 void Deck::addCardSolelyEncryptedByOpponent(const Point& cardCiphertext, uint8_t index) {
     if (index > contents.size()) [[unlikely]] throw std::logic_error("[Deck::addCardSolelyEncryptedByOpponent] Index out of bounds");
+    if (contents.size() == Constants::MAX_DECK_SIZE) [[unlikely]]
+        throw std::logic_error("[Deck::addCardSolelyEncryptedByOpponent] Deck is already full");
+
     contents.insert(contents.begin() + index, {cardCiphertext, { std::nullopt, std::nullopt }, true});
 }
 
@@ -103,6 +111,9 @@ void Deck::addCardSolelyEncryptedByOpponent(const Point& cardCiphertext, uint8_t
  */
 void Deck::addCardSolelyEncryptedLocally(CardID id, const Scalar& localKey, uint8_t index) {
     if (index > contents.size()) [[unlikely]] throw std::logic_error("[Deck::addCardSolelyEncryptedLocally] Index out of bounds");
+    if (contents.size() == Constants::MAX_DECK_SIZE) [[unlikely]]
+        throw std::logic_error("[Deck::addCardSolelyEncryptedLocally] Deck is already full");
+
     contents.insert(contents.begin() + index, {id, { localKey, std::nullopt }});
 }
 

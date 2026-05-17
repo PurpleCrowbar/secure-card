@@ -420,7 +420,12 @@ void Game::mill(PlayerID millingPlayer, uint8_t count, const bool logInVerifier)
 }
 
 void Game::addUnencryptedCardToDeck(PlayerID deckOwner, CardID card, uint8_t index) {
-    state.getPlayerData(deckOwner).deck.addUnencryptedCard(card, index);
+    auto& pd = state.getPlayerData(deckOwner);
+    if (pd.deck.getSize() == Constants::MAX_DECK_SIZE) {
+        std::cout << "Deck is full; " << CardFactory::create(card)->getName() << " couldn't be added.\n";
+        return;
+    }
+    pd.deck.addUnencryptedCard(card, index);
     verifier.logAction(Action::AddCardToDeck(deckOwner, card, index));
 }
 
