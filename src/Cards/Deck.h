@@ -20,11 +20,11 @@ public:
     bool addOpponentKey(uint8_t index, const Scalar& remoteKey);
     // TODO: addRandomCard for random cards unknown by both players. would have following signature:
     // bool addRandomCard(const std::set<CardID>& setOfPossibilities, const uint32_t& localRandomNum);
-    bool addUnencryptedCard(CardID id, uint8_t index = 0);
+    void addUnencryptedCard(CardID id, uint8_t index = 0);
     // Add encrypted card without keys (e.g., because of opponent's Brainstorm/Donation effect)
-    bool addCardSolelyEncryptedByOpponent(const Point& cardCiphertext, uint8_t index = 0);
+    void addCardSolelyEncryptedByOpponent(const Point& cardCiphertext, uint8_t index = 0);
     // As above, but with the local player's Brainstorm/Donation effects
-    bool addCardSolelyEncryptedLocally(CardID id, const Scalar& localKey, uint8_t index = 0);
+    void addCardSolelyEncryptedLocally(CardID id, const Scalar& localKey, uint8_t index = 0);
     [[nodiscard]] std::optional<CardID> draw();
     [[nodiscard]] std::vector<CardID> mill(uint8_t count);
     std::optional<CardID> removeCardAtIndex(uint8_t index);

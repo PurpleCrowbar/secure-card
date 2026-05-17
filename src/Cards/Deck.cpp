@@ -77,27 +77,21 @@ bool Deck::addOpponentKey(uint8_t index, const Scalar& remoteKey) {
  * verification any time cards are added (as all cards are known).
  * @param id ID of card being added
  * @param index Index of position in deck to add card
- * @return False if index invalid; else true
  */
-bool Deck::addUnencryptedCard(CardID id, uint8_t index) {
-    if (index >= contents.size() && index != 0) [[unlikely]] return false;
-
+void Deck::addUnencryptedCard(CardID id, uint8_t index) {
+    if (index > contents.size()) [[unlikely]] throw std::logic_error("[Deck::addUnencryptedCard] Index out of bounds");
     contents.insert(contents.begin() + index, {id, { std::nullopt, std::nullopt }, true});
     if (plaintextContents.has_value()) plaintextContents.value()[id]++;
-    return true;
 }
 
 /**
  * Adds encrypted card value with no keys. Called for opponent's Brainstorm / Donation effects only.\n
  * @param cardCiphertext Ciphertext of card being added
- * @param index Where in deck to add card
- * @returns True if successful, false if index out of bounds
+ * @param index Index of position in deck to add card
  */
-bool Deck::addCardSolelyEncryptedByOpponent(const Point &cardCiphertext, uint8_t index) {
-    if (index > contents.size()) [[unlikely]] return false;
-
+void Deck::addCardSolelyEncryptedByOpponent(const Point& cardCiphertext, uint8_t index) {
+    if (index > contents.size()) [[unlikely]] throw std::logic_error("[Deck::addCardSolelyEncryptedByOpponent] Index out of bounds");
     contents.insert(contents.begin() + index, {cardCiphertext, { std::nullopt, std::nullopt }, true});
-    return true;
 }
 
 /**
@@ -105,14 +99,11 @@ bool Deck::addCardSolelyEncryptedByOpponent(const Point &cardCiphertext, uint8_t
  * This card has only one encryption layer on it and it was provided by us.
  * @param id ID of card being added
  * @param localKey Local decryption key
- * @param index Where in deck to add card
- * @return True if successful, false if index out of bounds
+ * @param index Index of position in deck to add card
  */
-bool Deck::addCardSolelyEncryptedLocally(CardID id, const Scalar &localKey, uint8_t index) {
-    if (index > contents.size()) [[unlikely]] return false;
-
+void Deck::addCardSolelyEncryptedLocally(CardID id, const Scalar& localKey, uint8_t index) {
+    if (index > contents.size()) [[unlikely]] throw std::logic_error("[Deck::addCardSolelyEncryptedLocally] Index out of bounds");
     contents.insert(contents.begin() + index, {id, { localKey, std::nullopt }});
-    return true;
 }
 
 // TODO: Must be updated to return std::expected<CardID, DeckQueryError>, which requires update to C++23

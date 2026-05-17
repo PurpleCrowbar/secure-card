@@ -252,7 +252,8 @@ bool GameVerifier::run() {
 
             [&](const Action::AddCardToDeck& a) -> bool {
                 auto& pd = state.getPlayerData(a.deckOwner);
-                return pd.deck.addUnencryptedCard(a.card, a.index);
+                pd.deck.addUnencryptedCard(a.card, a.index);
+                return true;
             },
 
             [&](const Action::VerifyCommitment& a) -> bool {

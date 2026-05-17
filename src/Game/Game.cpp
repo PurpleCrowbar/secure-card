@@ -420,18 +420,19 @@ void Game::mill(PlayerID millingPlayer, uint8_t count, const bool logInVerifier)
 }
 
 void Game::addUnencryptedCardToDeck(PlayerID deckOwner, CardID card, uint8_t index) {
-    auto& playerData = state.getPlayerData(deckOwner);
-    if (!playerData.deck.addUnencryptedCard(card, index)) {
-        throw std::runtime_error("[Game::addUnencryptedCardToDeck] Invalid index supplied.");
-    }
+    state.getPlayerData(deckOwner).deck.addUnencryptedCard(card, index);
     verifier.logAction(Action::AddCardToDeck(deckOwner, card, index));
 }
 
+/**
+ * @param deckOwner Player who owns the deck having a card added
+ * @param card ID of card being added
+ * @param fromBottom Number of cards from the bottom. Treated as 0 by default or if actual value larger than deck size
+ */
 void Game::addUnencryptedCardToDeckBottom(PlayerID deckOwner, CardID card, uint8_t fromBottom) {
     auto& playerData = state.getPlayerData(deckOwner);
-    uint8_t deckSize = playerData.deck.getSize();
-    if (deckSize == 0) addUnencryptedCardToDeck(deckOwner, card, 0);
-    else addUnencryptedCardToDeck(deckOwner, card, deckSize - 1 - fromBottom);
+    int deckSize = playerData.deck.getSize();
+    addUnencryptedCardToDeck(deckOwner, card, std::max(0, deckSize - fromBottom));
 }
 
 /**
