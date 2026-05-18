@@ -156,7 +156,7 @@ std::vector<CardID> Deck::mill(uint8_t count) {
 
     for (int i = 0; i < cardsToMill; i++) {
         auto card = std::get_if<CardID>(&contents[i].card);
-        if (!card) throw std::logic_error("[Deck::mill] Attempted to mill unknown card. Ensure cards in range are known before milling\n");
+        if (!card) throw std::logic_error("[Deck::mill] Attempted to mill unknown card. Ensure cards in range are known before milling");
         milledCards.push_back(*card);
     }
     // This is done outside the first loop so that the deck is not corrupted if card identification fails
@@ -169,7 +169,7 @@ std::vector<CardID> Deck::mill(uint8_t count) {
  * @return Card ID of removed card if we knew it, else nullopt
  */
 std::optional<CardID> Deck::removeCardAtIndex(uint8_t index) {
-    if (index >= contents.size()) [[unlikely]] throw std::runtime_error("[Deck::removeCardAtIndex]: Index out of bounds\n");
+    if (index >= contents.size()) [[unlikely]] throw std::runtime_error("[Deck::removeCardAtIndex]: Index out of bounds");
 
     auto card = std::get_if<CardID>(&contents[index].card);
     CardID cardId;
@@ -200,7 +200,7 @@ void Deck::setKnownToOpponent(uint8_t index, bool known) {
 }
 
 void Deck::setKnownToOpponentAtIndices(const std::set<uint8_t> &indices) {
-    if (!indices.empty() && *indices.rbegin() >= contents.size()) throw std::runtime_error("[Deck::setKnownToOpponentAtIndices] Index out of bounds\n");
+    if (!indices.empty() && *indices.rbegin() >= contents.size()) throw std::runtime_error("[Deck::setKnownToOpponentAtIndices] Index out of bounds");
 
     for (auto index : indices) {
         setKnownToOpponent(index);
@@ -284,7 +284,7 @@ std::set<uint8_t> Deck::getIndicesOfCardsSolelyEncryptedLocally() const {
  * @return The known plaintext contents of the deck. Key = card ID, value = quantity present
  */
 std::map<CardID, uint8_t> Deck::getContents() const {
-    if (!plaintextContents.has_value()) [[unlikely]] throw std::logic_error("[Deck::getContents] Called on deck that isn't tracking contents\n");
+    if (!plaintextContents.has_value()) [[unlikely]] throw std::logic_error("[Deck::getContents] Called on deck that isn't tracking contents");
     return plaintextContents.value();
 }
 
@@ -294,7 +294,7 @@ std::map<CardID, uint8_t> Deck::getContents() const {
  */
 bool Deck::isKnownToOpponent(uint8_t index) const {
     if (index >= contents.size()) [[unlikely]]
-        throw std::runtime_error(std::format("[Deck::isKnownToOpponent] Index out of bounds.\n"));
+        throw std::runtime_error(std::format("[Deck::isKnownToOpponent] Index out of bounds"));
     return contents[index].knownToOpponent;
 }
 
@@ -304,13 +304,13 @@ bool Deck::isKnownToOpponent(uint8_t index) const {
  * @return Vector of keys in the order of the given set of indices
  */
 std::vector<Scalar> Deck::getLocalKeysAtIndices(const std::set<uint8_t>& indices) const {
-    if (!indices.empty() && *indices.rbegin() >= contents.size()) throw std::runtime_error("[Deck::getLocalKeysAtIndices] Index out of bounds.\n");
+    if (!indices.empty() && *indices.rbegin() >= contents.size()) throw std::runtime_error("[Deck::getLocalKeysAtIndices] Index out of bounds");
 
     std::vector<Scalar> localKeys;
     localKeys.reserve(indices.size());
     for (auto index : indices) {
         if (!contents[index].keys.first.has_value())
-            throw std::runtime_error(std::format("[Deck::getLocalKeysAtIndices] No local key at index {}.\n", index));
+            throw std::runtime_error(std::format("[Deck::getLocalKeysAtIndices] No local key at index {}", index));
         localKeys.push_back(contents[index].keys.first.value());
     }
     return localKeys;
@@ -363,7 +363,7 @@ void Deck::v_setPlaintextContents(const std::map<CardID, uint8_t>& newPlaintextC
  */
 void Deck::v_shuffleWithSeeds(ShuffleSeed ownerSeed, ShuffleSeed enemySeed) {
     if (!plaintextContents.has_value()) throw std::logic_error(
-        "[Deck::v_shuffleWithSeeds] Deck not tracking contents during verification\n"
+        "[Deck::v_shuffleWithSeeds] Deck not tracking contents during verification"
     );
     if (plaintextContents.value().empty()) return;
 

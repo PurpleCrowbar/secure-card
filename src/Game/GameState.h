@@ -79,7 +79,7 @@ public:
         auto data = playerData[static_cast<std::underlying_type_t<PlayerID>>(player)];
         if (const auto hand = std::get_if<ClearHand>(&data.hand)) return hand->getSize();
         if (const auto hand = std::get_if<UnknownHand>(&data.hand)) return hand->getSize();
-        throw std::logic_error("[GameState::getHandSize] Hand was not of ClearHand or UnknownHand type\n");
+        throw std::logic_error("[GameState::getHandSize] Hand was not of ClearHand or UnknownHand type");
     }
 
     [[nodiscard]] size_t getOpponentHandSize(PlayerID player) const {

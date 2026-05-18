@@ -16,7 +16,7 @@ void SpectralWail::resolve(Game& game, PlayerID controller) {
         std::vector<Point> ciphertexts = game.network.receivePoints();
         if (ciphertexts.size() != game.state.getOpponentHandSize(controller)) {
             throw std::runtime_error(std::format(
-                "[SpectralWail::resolve] Error: received {} ciphertexts, expected {} (opponent's hand size)\n",
+                "[SpectralWail::resolve] Error: received {} ciphertexts, expected {} (opponent's hand size)",
                 ciphertexts.size(), game.state.getOpponentHandSize(controller)
             ));
         }
@@ -29,7 +29,7 @@ void SpectralWail::resolve(Game& game, PlayerID controller) {
         // Receive the key for the randomly selected ciphertext
         // TODO: Possible optimisation can be made here: update the commitment with any keys received during the effect's resolution
         auto card = LookupTable::instance().getCardID(decrypt(ciphertexts.at(index), game.network.receiveScalar()));
-        if (!card.has_value()) throw std::runtime_error("[SpectralWail::resolve] Error: received decryption key failed to decrypt ciphertext\n");
+        if (!card.has_value()) throw std::runtime_error("[SpectralWail::resolve] Error: received decryption key failed to decrypt ciphertext");
 
         // Remove that card from the opponent's hand and add it to their graveyard
         game.discard(opponent, card.value());
@@ -56,7 +56,7 @@ void SpectralWail::resolve(Game& game, PlayerID controller) {
         // Receive the card the opponent wishes us to discard
         auto indexToDiscard = game.network.receiveUint8();
         if (indexToDiscard >= handContents.size()) throw std::runtime_error(
-            "[SpectralWail::resolve] Error: received invalid index for card in hand\n"
+            "[SpectralWail::resolve] Error: received invalid index for card in hand"
         );
 
         // Send the key for the card at the index

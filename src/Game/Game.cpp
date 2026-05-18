@@ -375,7 +375,7 @@ void Game::mill(PlayerID millingPlayer, uint8_t count, const bool logInVerifier)
         if (indicesOfLocallyUnknown.empty()) return;
         std::vector<Scalar> receivedKeys = network.receiveScalars();
         if (receivedKeys.size() != indicesOfLocallyUnknown.size())
-            throw std::runtime_error("[Game::mill] Received invalid number of keys.\n");
+            throw std::runtime_error("[Game::mill] Received invalid number of keys");
         auto keyIt = receivedKeys.begin();
         for (auto index : indicesOfLocallyUnknown) playerData.deck.addOpponentKey(index, *keyIt++);
     };
