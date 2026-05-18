@@ -192,13 +192,11 @@ std::optional<CardID> Deck::removeCardAtIndex(uint8_t index) {
  * Tags a card as being known by the opponent.
  * @param index Index of card to update
  * @param known Whether the card is known by opponent or not. Defaults to true
- * @return True if successful; false if index out of bounds
  */
-bool Deck::setKnownToOpponent(uint8_t index, bool known) {
+void Deck::setKnownToOpponent(uint8_t index, bool known) {
     if (index >= contents.size()) [[unlikely]]
         throw std::logic_error("[Deck::setKnownToOpponent] Index {} is out of bounds");
     contents[index].knownToOpponent = known;
-    return true;
 }
 
 void Deck::setKnownToOpponentAtIndices(const std::set<uint8_t> &indices) {

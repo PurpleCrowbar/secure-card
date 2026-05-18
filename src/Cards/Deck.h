@@ -28,7 +28,7 @@ public:
     [[nodiscard]] std::optional<CardID> draw();
     [[nodiscard]] std::vector<CardID> mill(uint8_t count);
     std::optional<CardID> removeCardAtIndex(uint8_t index);
-    bool setKnownToOpponent(uint8_t index, bool known = true);
+    void setKnownToOpponent(uint8_t index, bool known = true);
     void setKnownToOpponentAtIndices(const std::set<uint8_t>& indices);
     void disableContentsTracking();
 
