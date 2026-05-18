@@ -49,10 +49,12 @@ void Deck::setEncryptedContents(const std::vector<std::pair<Point, Scalar>>& enc
  * Card ID must be supplied if card solely encrypted by opponent.
  * @param index Index of card being accessed
  * @param remoteKey Remote key for this card
- * @return True if successful; false if index out of bounds, card value already known
  */
-bool Deck::addOpponentKey(uint8_t index, const Scalar& remoteKey) {
-    if (index >= contents.size() || std::get_if<CardID>(&contents[index].card)) [[unlikely]] return false;
+void Deck::addOpponentKey(uint8_t index, const Scalar& remoteKey) {
+    if (index >= contents.size()) [[unlikely]]
+        throw std::logic_error(std::format("[Deck::addOpponentKey] Index '{}' is out of bounds", index));
+    if (std::get_if<CardID>(&contents[index].card)) [[unlikely]]
+        throw std::logic_error("[Deck::addOpponentKey] Card value already known");
 
     contents[index].keys.second = remoteKey;
     std::optional<CardID> card;
@@ -69,9 +71,8 @@ bool Deck::addOpponentKey(uint8_t index, const Scalar& remoteKey) {
         );
         if (plaintextContents.has_value()) plaintextContents.value()[card.value()]++;
     }
-    if (!card.has_value()) return false;
+    if (!card.has_value()) throw std::runtime_error("[Deck::addOpponentKey] Card failed to decrypt; dud key received");
     contents[index].card = card.value();
-    return true;
 }
 
 /**
@@ -155,7 +156,7 @@ std::vector<CardID> Deck::mill(uint8_t count) {
 
     for (int i = 0; i < cardsToMill; i++) {
         auto card = std::get_if<CardID>(&contents[i].card);
-        if (!card) throw std::runtime_error("[Deck::mill] Attempted to mill unknown card. Ensure cards in range are known before milling\n");
+        if (!card) throw std::logic_error("[Deck::mill] Attempted to mill unknown card. Ensure cards in range are known before milling\n");
         milledCards.push_back(*card);
     }
     // This is done outside the first loop so that the deck is not corrupted if card identification fails
@@ -191,10 +192,11 @@ std::optional<CardID> Deck::removeCardAtIndex(uint8_t index) {
  * Tags a card as being known by the opponent.
  * @param index Index of card to update
  * @param known Whether the card is known by opponent or not. Defaults to true
- * @return True if successful; false if index out of bounds or card ID unknown
+ * @return True if successful; false if index out of bounds
  */
 bool Deck::setKnownToOpponent(uint8_t index, bool known) {
-    if (index >= contents.size()) [[unlikely]] return false;
+    if (index >= contents.size()) [[unlikely]]
+        throw std::logic_error("[Deck::setKnownToOpponent] Index {} is out of bounds");
     contents[index].knownToOpponent = known;
     return true;
 }
