@@ -567,6 +567,7 @@ void Game::drawCards(PlayerID player, uint8_t count) {
     else {
         // send opponent our local keys for the cards they need to draw
         network.sendScalars(drawingPlayerData.deck.getLocalKeysAtIndices(indicesDrawerDoesntKnow));
+        drawingPlayerData.deck.setKnownToOpponentAtIndices(indicesDrawerDoesntKnow);
 
         // update our opponent's deck and hands (remove from deck, add to hand)
         for (int i = 0; i < count; i++) {
