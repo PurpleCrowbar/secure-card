@@ -17,7 +17,7 @@ public:
     void setEncryptedContents(const std::vector<std::pair<Point, Scalar>>& encryptedDeck);
 
     // Setters
-    bool addOpponentKey(uint8_t index, const Scalar& remoteKey);
+    void addOpponentKey(uint8_t index, const Scalar& remoteKey);
     // TODO: addRandomCard for random cards unknown by both players. would have following signature:
     // bool addRandomCard(const std::set<CardID>& setOfPossibilities, const uint32_t& localRandomNum);
     void addUnencryptedCard(CardID id, uint8_t index = 0);

@@ -527,8 +527,7 @@ void Game::drawCards(PlayerID player, uint8_t count) {
 
         // Decrypt each relevant card
         for (const auto index : indicesDrawerDoesntKnow) {
-            if (!drawingPlayerData.deck.addOpponentKey(index, receivedKeys.front()))
-                throw std::runtime_error("[Game::drawCards] addOpponentKey failed for index " + std::to_string(index));
+            drawingPlayerData.deck.addOpponentKey(index, receivedKeys.front());
             receivedKeys.erase(receivedKeys.begin());
         }
 
