@@ -1,5 +1,7 @@
 # Secure Card
 
+[![Build Status](https://github.com/PurpleCrowbar/secure-card/actions/workflows/build.yml/badge.svg)](https://github.com/PurpleCrowbar/secure-card/actions/workflows/build.yml)
+
 A 1v1, peer-to-peer trading card game implementation. Utilises mental poker protocols and commitment schemes to prevent or detect all possible forms of cheating. Compatible with Windows, Linux, and macOS.
 
 ## Prerequisites
